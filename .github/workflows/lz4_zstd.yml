@@ -1,4 +1,4 @@
-name: Build OnePlus_SukiSU Ultra All
+name: Build GT5 PRO lz4
 on:
   workflow_dispatch:
     inputs:
