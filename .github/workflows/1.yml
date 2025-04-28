@@ -182,9 +182,6 @@ jobs:
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           cd kernel_platform
-          patch -p1 < ../../.repo/manifests/patches/001-lz4.patch
-          patch -p1 < ../../.repo/manifests/patches/002-zstd.patch
-          cd kernel_platform
           # Copy SUSFS patches
           echo "正在给内核打susfs补丁"
           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch ./common/
