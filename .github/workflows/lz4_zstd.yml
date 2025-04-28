@@ -1,4 +1,4 @@
-name: Build GT5 PRO lz4
+name: Build GT5PRO_SukiSU Ultra LZ4
 on:
   workflow_dispatch:
     inputs:
@@ -191,7 +191,26 @@ jobs:
         run: |
           cd kernel_workspace/kernel_platform
           CONFIG_FILE=./common/arch/arm64/configs/gki_defconfig
-          KERNEL_VERSION="${{ github.event.inputs.KERNEL_VERSION }}"
+
+          # 使用 sed 在指定位置插入配置项（避免破坏原有结构）
+          sed -i '/CONFIG_ANDROID_DEBUG_KINFO=y/a CONFIG_KSU=y' "$CONFIG_FILE"
+          sed -i '/CONFIG_KSU=y/a CONFIG_KPM=y' "$CONFIG_FILE"
+          sed -i '/CONFIG_KPM=y/a CONFIG_KSU_SUSFS_SUS_SU=n' "$CONFIG_FILE"
+          sed -i '/CONFIG_KSU_SUSFS_SUS_SU=n/a CONFIG_KSU_MANUAL_HOOK=y' "$CONFIG_FILE"
+
+          # 重新生成 defconfig 并覆盖原文件
+          make ARCH=arm64 O=out savedefconfig
+          cp out/defconfig "$CONFIG_FILE"
+
+          # 提交配置修改（可选）
+          git add "$CONFIG_FILE"
+          git commit -m "Update SUSFS configs with proper ordering"
+
+      # 清理构建缓存（关键步骤）
+      - name: Clean build artifacts
+        run: |
+          cd kernel_workspace
+          rm -rf out/ .bazel-cache/ kernel_platform/common/arch/arm64/configs/gki_defconfig
 
           # SukiSU Ultra config
           echo "CONFIG_KSU=y" >> "$CONFIG_FILE"
