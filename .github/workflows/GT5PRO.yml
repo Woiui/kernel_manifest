@@ -1,4 +1,4 @@
-name: 编译GT5PRO内核
+name: 编译真我GT5 Pro内核
 
 on:
   workflow_dispatch:
@@ -11,7 +11,8 @@ env:
   FEIL: 'gt5pro'
   CPUD: 'pineapple'
   ANDROID_VERSION: 'android14'
-  KVER: '6.1'
+  KERNEL_VERSION: '6.1'
+  KERNEL_NAME: '-android14-11-o-gca13bffobf09'
   KERNELSU_VARIANT: 'SukiSU-Ultra'
   KERNELSU_VERSION: 'main'
   SUSFS_ENABLED: '启用'
@@ -36,7 +37,7 @@ jobs:
 
       - name: 配置 Git
         run: |
-          git config --global user.name "Woiui"
+          git config --global user.name "ychenxuan"
           git config --global user.email "2785422781@qq.com"
 
       - name: 安装依赖项
@@ -53,10 +54,13 @@ jobs:
       - name: 初始化版本库并同步
         run: |
           mkdir kernel_workspace && cd kernel_workspace
-          repo init -u https://github.com/Woiui/kernel_manifest.git -b realme/${{ env.CPU }} -m ${{ env.FEIL }}.xml --depth=1
+          repo init -u https://github.com/ferstar/kernel_manifest.git -b realme/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
           repo sync -c -j$(nproc --all) --no-tags --fail-fast
           rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
           rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
+          sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
+          sed -i 's/ -dirty//g' kernel_platform/msm-kernel/scripts/setlocalversion
+          sed -i 's/ -dirty//g' kernel_platform/external/dtc/scripts/setlocalversion
       
       - name: KernelSU 和 SukiSU-Ultra 版本
         run: |
@@ -81,17 +85,17 @@ jobs:
       - name: 应用 SUSFS 修补程序 SukiSU-Ultra
         run: |
           cd kernel_workspace
-          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ env.ANDROID_VERSION }}-${{ env.KVER }}
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           cd kernel_platform
 
           # Copy SUSFS patches
-          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KVER }}.patch ./common/
+          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch ./common/
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
           cd ./common
-          patch -p1 < 50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KVER }}.patch || true
+          patch -p1 < 50_add_susfs_in_gki-${{ env.ANDROID_VERSION }}-${{ env.KERNEL_VERSION }}.patch || true
 
       - name: 应用 Hide Stuff 修补程序
         run: |
@@ -105,8 +109,8 @@ jobs:
           cp ../../SukiSU_patch/hooks/new_hooks.patch ./
           patch -p1 -F 3 < new_hooks.patch
 
-          #if [ "${{ env.KVER }}" != "5.10" ]; then
-          #  cp ../../SukiSU_patch/other/lz4k_patch/${{ env.KVER }}/lz4kd.patch ./
+          #if [ "${{ env.KERNEL_VERSION }}" != "5.10" ]; then
+          #  cp ../../SukiSU_patch/other/lz4k_patch/${{ env.KERNEL_VERSION }}/lz4kd.patch ./
           #  patch -p1 -F 3 < lz4kd.patch || true
           #fi
 
@@ -134,7 +138,7 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
 
-          #if [ "${{ env.KVER }}" != "6.6" ] && [ "${{ env.KVER }}" != "5.10" ]; then
+          #if [ "${{ env.KERNEL_VERSION }}" != "6.6" ] && [ "${{ env.KERNEL_VERSION }}" != "5.10" ]; then
           #  sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' ./common/arch/arm64/configs/gki_defconfig
           #  sed -i 's/CONFIG_ZSMALLOC=m/CONFIG_ZSMALLOC=y/g' ./common/arch/arm64/configs/gki_defconfig
           #  sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/g' ./common/arch/arm64/configs/gki_defconfig
@@ -145,7 +149,7 @@ jobs:
           #  echo "CONFIG_CRYPTO_842=y" >> ./common/arch/arm64/configs/gki_defconfig
           #fi
 
-          if [ "${{ env.KVER }}" = "6.6" ]; then
+          if [ "${{ env.KERNEL_VERSION }}" = "6.6" ]; then
             echo "CONFIG_ZSMALLOC=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_ZRAM_WRITEBACK=y" >> ./common/arch/arm64/configs/gki_defconfig
             sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' ./common/arch/arm64/configs/gki_defconfig
@@ -255,7 +259,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: "build-${{ github.run_id }}"
-          name: "Realme_Gt5 Pro Build ${{ github.run_number }}"
+          name: "Realme Gt5 Pro Build ${{ github.run_number }}"
           body: |
             每日自动编译 SukiSU-Ultra 内核
             - 机型： 真我GT5 PRO
