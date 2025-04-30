@@ -11,7 +11,7 @@ env:
   FEIL: 'gt5pro'
   CPUD: 'pineapple'
   ANDROID_VERSION: 'android14'
-  KERNEL_VERSION: '6.1'
+  KVER: '6.1'
   KERNELSU_VARIANT: 'SukiSU-Ultra'
   KERNELSU_VERSION: 'main'
   SUSFS_ENABLED: '启用'
@@ -53,7 +53,7 @@ jobs:
       - name: 初始化版本库并同步
         run: |
           mkdir kernel_workspace && cd kernel_workspace
-          repo init -u https://github.com/Woiui/kernel_manifest.git -b realme/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
+          repo init -u https://github.com/Woiui/kernel_manifest.git \ -b realme/${{ env.CPU }} \ -m ${{ env.FEIL }}.xml \ --depth=1
           repo sync -c -j$(nproc --all) --no-tags --fail-fast
           rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
           rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
