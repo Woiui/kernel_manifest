@@ -1,4 +1,4 @@
-name: 编译真我gt5pro内核
+name: 编译一加ACE5内核
 
 on:
   workflow_dispatch:
@@ -160,7 +160,16 @@ jobs:
             patch -p1 -F 3 < zstdn.patch || true
             echo '完成ZSTDN补丁'
           fi
-
+          REPO_PATCHES="../../.repo/manifests/patches"
+          for PATCH in 001-lz4.patch 002-zstd.patch; do
+            if [ ! -f "${REPO_PATCHES}/${PATCH}" ]; then
+             echo "错误：${PATCH} 不存在于 ${REPO_PATCHES}"
+             exit 1
+            fi
+            echo "正在应用通用补丁 ${PATCH}..."
+            patch -p1 < "${REPO_PATCHES}/${PATCH}" || { echo "错误：${PATCH} 应用失败"; exit 1; }
+            echo "完成 ${PATCH}"
+          done
       - name: 添加配置设置
         run: |
           cd kernel_workspace/kernel_platform
@@ -309,7 +318,7 @@ jobs:
           fi
 
           # 可选复制其它新文件（如果存在）
-          if [ "${{ env.CPU }}" = "sm8750" ]; then
+          if [ "${{ env.CPU }}" = "sm8650" ]; then
           for file in dtbo.img system_dlkm.erofs.img vendor_dlkm.img vendor_boot.img; do
             if [ -f "$dir1$file" ]; then
               target_name="$file"
@@ -415,10 +424,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: "build-${{ github.run_id }}"
-          name: "gt5pro Build ${{ github.run_number }}"
+          name: "OnePlus_ACE5 Build ${{ github.run_number }}"
           body: |
             每日自动编译 SukiSU-Ultra 内核
-            - 机型： 真我gT5PRO
+            - 机型： 一加ACE5
             - 特性：MKSU+SUSFS+VFS+KPM+LZ4K
             - 编译时间: ${{ github.event.repository.updated_at }}
             - 内核版本: ${{ needs.build.outputs.ksuver }}
