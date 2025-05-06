@@ -1,4 +1,4 @@
-name: Build GT5PRO_SukiSU Ultra All
+name: Build OnePlus_SukiSU Ultra All带lz4
 on:
   workflow_dispatch:
     inputs:
@@ -8,27 +8,59 @@ on:
         required: true
         default: sm8650
         options:
+          - sm7550
+          - sm7675
+          - sm8450
+          - sm8475
+          - sm8550
           - sm8650
+          - sm8750
       FEIL:
         type: choice
         description: "配置文件"
         required: true
         default: gt5pro
         options:
-          - gt5pro
+          - oneplus_nord_ce4_v
+          - oneplus_ace_3v_v
+          - oneplus_nord_4_v
+          - oneplus_10_pro_v
+          - oneplus_10t_v
+          - oneplus_11r_v
+          - oneplus_ace2_v
+          - oneplus_ace_pro_v
+          - oneplus_11_v
+          - oneplus_12r_v
+          - oneplus_ace2pro_v
+          - oneplus_ace3_v
+          - oneplus_open_v
+          - oneplus12_v
+          - oneplus_13r
+          - oneplus_ace3_pro_v
+          - oneplus_ace5
+          - oneplus_pad2_v
+          - oneplus_13
+          - oneplus_ace5_pro
+          - GitHub有bug可能不显示最后一项,误使用此项
       CPUD:
         type: choice
         description: "处理器代号"
         required: true
         default: pineapple
         options:
+          - crow
+          - waipio
+          - kalama
           - pineapple
+          - sun
       ANDROID_VERSION:
         type: choice
         description: "内核安卓版本"
         required: true
         default: android14
         options:
+          - android12
+          - android13
           - android14
           - android15
       KERNEL_VERSION:
@@ -37,7 +69,10 @@ on:
        required: true
        default: "6.1"
        options:
+         - "5.10"
+         - "5.15"
          - "6.1"
+         - "6.6"
       BUILD_METHOD:
         type: choice
         description: "编译方式"
@@ -45,21 +80,27 @@ on:
         default: gki
         options:
           - gki
+          - perf
       SUSFS_CI:
         type: boolean
         description: "SUSFS模块下载是否调用CI？"
         required: true
-        default: true
-      LZ4:
-        type: boolean
-        description: "是否启用lz4？"
-        required: true
         default: false
       VFS:
         type: boolean
-        description: "是否启用VFS？"
+        description: "是否启用手动钩子？"
         required: true
         default: true
+      KPM:
+        type: boolean
+        description: "是否启用KPM？"
+        required: true
+        default: true
+      ZRAM:
+        type: boolean
+        description: "是否启用添加更多的ZRAM算法？"
+        required: true
+        default: false
 
 jobs:
   build:
@@ -80,7 +121,7 @@ jobs:
       - name: Configure Git
         run: |
           git config --global user.name "Numbersf"
-          git config --global user.email "2785422781@qq.com"
+          git config --global user.email "263623064@qq.com"
 
       - name: Install dependencies
         run: |
@@ -96,8 +137,9 @@ jobs:
           echo "Selected KERNEL_VERSION: ${{ github.event.inputs.KERNEL_VERSION }}"
           echo "Selected BUILD_METHOD: ${{ github.event.inputs.BUILD_METHOD }}"
           echo "Selected SUSFS_CI: ${{ github.event.inputs.SUSFS_CI }}"
-          echo "Selected LZ4: ${{ github.event.inputs.LZ4 }}"
+          echo "Selected ZRAM: ${{ github.event.inputs.ZRAM }}"
           echo "Selected VFS: ${{ github.event.inputs.VFS }}"
+          echo "Selected KPM: ${{ github.event.inputs.KPM }}"
 
       - name: Install repo tool
         run: |
@@ -109,10 +151,16 @@ jobs:
         run: |
           mkdir kernel_workspace && cd kernel_workspace
           repo init -u https://github.com/ferstar/kernel_manifest.git -b realme/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
-          repo sync -c -j$(nproc --all) --no-tags --fail-fast
+          repo sync
+          if [  -e kernel_platform/common/BUILD.bazel ]; then
+          sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' kernel_platform/common/BUILD.bazel
+          fi
+          if [  -e kernel_platform/msm-kernel/BUILD.bazel ]; then
+          sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' kernel_platform/msm-kernel/BUILD.bazel
+          fi
           rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
           rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
-          
+
       # 删除 -dirty 后缀
       - name: Force remove -dirty suffix
         run: |
@@ -135,23 +183,24 @@ jobs:
           export KSU_VERSION=$KSU_VERSION
           sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
 
-      - name: Apply SUSFS Patches SukiSU Ultra
+      - name: Apply Patches SukiSU Ultra
         run: |
           cd kernel_workspace
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           cd kernel_platform
-          # Copy SUSFS patches
           echo "正在给内核打susfs补丁"
           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch ./common/
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
 
-          if [ "${{ github.event.inputs.LZ4 }}" = "true" ]; then
-          echo "正在给内核打lz4补丁"
-          cp -r ../SukiSU_patch/other/lz4k/include/linux/* ./common/include/linux
-          cp -r ../SukiSU_patch/other/lz4k/lib/* ./common/lib
-          cp -r ../SukiSU_patch/other/lz4k/crypto/* ./common/crypto
+          if [ "${{ github.event.inputs.ZRAM }}" = "true" ]; then
+          echo "正在给内核打zram补丁"
+          cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
+          cp -r ../SukiSU_patch/other/zram/lz4k/lib/* ./common/lib
+          cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./common/crypto
+          cp -r ../SukiSU_patch/other/zram/zstdn ./common/lib/
+          cp -r ../SukiSU_patch/other/zram/lz4k_oplus ./common/lib/
           fi
 
           cd ./common
@@ -165,8 +214,7 @@ jobs:
           echo "正在打隐藏应用补丁"
           patch -p1 -F 3 < 69_hide_stuff.patch
 
-      # VFS？LZ4？
-      - name: Apply VFS and LZ4KD
+      - name: Apply VFS
         run: |
           cd kernel_workspace/kernel_platform/common
           if [ "${{ github.event.inputs.VFS }}" = "true" ]; then
@@ -176,22 +224,34 @@ jobs:
           echo "vfs_patch完成"
           fi
 
-          if [ "${{ github.event.inputs.VFS }}" = "false" ]; then
-          cp ../../SukiSU_patch/hooks/ksu_hooks.patch ./
-          echo "正在打ksu官方补丁"
-          patch -p1 -F 3 < ksu_hooks.patch
-          echo "ksu_patch完成"
-          fi
-
-          if [ "${{ github.event.inputs.LZ4 }}" = "true" ]; then
-            cp ../../SukiSU_patch/other/lz4k_patch/${{ github.event.inputs.KERNEL_VERSION }}/lz4kd.patch ./
+      - name: Apply LZ4KD&ZSTDN
+        run: |
+          cd kernel_workspace/kernel_platform/common
+          if [ "${{ github.event.inputs.ZRAM }}" = "true" ]; then
+            cp ../../SukiSU_patch/other/zram/zram_patch/${{ github.event.inputs.KERNEL_VERSION }}/lz4kd.patch ./
             echo "正在打lz4kd补丁"
             patch -p1 -F 3 < lz4kd.patch || true
-            echo "lz4_patch完成"
+            echo '完成LZ4KD补丁'
+
+            cp ../../SukiSU_patch/other/zram/zram_patch/${{ github.event.inputs.KERNEL_VERSION }}/zstdn.patch ./
+            echo "正在打zstdn补丁"
+            patch -p1 -F 3 < zstdn.patch || true
+            echo '完成ZSTDN补丁'
           fi
 
-      # 配置 SUSFS
-      - name: Add SUSFS Configuration Settings
+          REPO_PATCHES="../../.repo/manifests/patches"
+          for PATCH in 001-lz4.patch 002-zstd.patch; do
+            if [ ! -f "${REPO_PATCHES}/${PATCH}" ]; then
+             echo "错误：${PATCH} 不存在于 ${REPO_PATCHES}"
+             exit 1
+            fi
+            echo "正在应用通用补丁 ${PATCH}..."
+            patch -p1 < "${REPO_PATCHES}/${PATCH}" || { echo "错误：${PATCH} 应用失败"; exit 1; }
+            echo "完成 ${PATCH}"
+          done
+
+      # 配置信息
+      - name: Add Configuration Settings
         run: |
           cd kernel_workspace/kernel_platform
           CONFIG_FILE=./common/arch/arm64/configs/gki_defconfig
@@ -233,12 +293,10 @@ jobs:
           fi
 
           # Remove check_defconfig
-          if [ "${{ github.event.inputs.LZ4 }}" = "false" ]; then
-            sed -i 's/check_defconfig//' ./common/build.config.gki
-          fi
+          sed -i 's/check_defconfig//' ./common/build.config.gki
 
-          # 添加 LZ4 Config
-          if [ "${{ github.event.inputs.LZ4 }}" = "true" ]; then
+          # LZ4KD&ZSTDN配置
+          if [ "${{ github.event.inputs.ZRAM }}" = "true" ]; then
           CONFIG_FILE=./common/arch/arm64/configs/gki_defconfig
 
             if [ "${{ github.event.inputs.KERNEL_VERSION }}" = "5.10" ]; then
@@ -249,9 +307,16 @@ jobs:
               echo "CONFIG_ZRAM_DEF_COMP_LZ4KD=y" >> "$CONFIG_FILE"
             fi
 
+
             if [ "${{ github.event.inputs.KERNEL_VERSION }}" != "6.6" ] && [ "${{ github.event.inputs.KERNEL_VERSION }}" != "5.10" ]; then
-              sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/g' "$CONFIG_FILE"
-              sed -i 's/CONFIG_ZSMALLOC=m/CONFIG_ZSMALLOC=y/g' "$CONFIG_FILE"
+              if [ "${{ github.event.inputs.KERNEL_VERSION }}" != "5.15" ]; then
+                sed -i 's/CONFIG_MODULE_SIG=y/CONFIG_MODULE_SIG=n/g' "$CONFIG_FILE"
+              fi
+              if grep -q "CONFIG_ZSMALLOC" -- "$CONFIG_FILE"; then
+                sed -i 's/CONFIG_ZSMALLOC=m/CONFIG_ZSMALLOC=y/g' "$CONFIG_FILE"
+              else
+                echo "CONFIG_ZSMALLOC=y" >> "$CONFIG_FILE"
+              fi
               sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' "$CONFIG_FILE"
             fi
 
@@ -260,13 +325,23 @@ jobs:
               sed -i 's/CONFIG_ZRAM=m/CONFIG_ZRAM=y/g' "$CONFIG_FILE"
             fi
 
+            if [ "${{ github.event.inputs.ANDROID_VERSION }}" = "android14" ] || [ "${{ github.event.inputs.ANDROID_VERSION }}" = "android15" ]; then
+              if [  -e ./common/modules.bzl ]; then
+                sed -i 's/"drivers\/block\/zram\/zram\.ko",//g; s/"mm\/zsmalloc\.ko",//g' "./common/modules.bzl"
+              fi
+              echo "CONFIG_MODULE_SIG_FORCE=n" >> "$CONFIG_FILE"
+            elif [ "${{ github.event.inputs.KERNEL_VERSION }}" = "5.15" ]; then
+              rm "./common/android/gki_aarch64_modules"
+              touch "./common/android/gki_aarch64_modules"
+            fi
+
             if grep -q "CONFIG_ZSMALLOC=y" "$CONFIG_FILE" && grep -q "CONFIG_ZRAM=y" "$CONFIG_FILE"; then
               echo "CONFIG_CRYPTO_LZ4HC=y" >> "$CONFIG_FILE"
               echo "CONFIG_CRYPTO_LZ4K=y" >> "$CONFIG_FILE"
               echo "CONFIG_CRYPTO_LZ4KD=y" >> "$CONFIG_FILE"
               echo "CONFIG_CRYPTO_842=y" >> "$CONFIG_FILE"
-              # Remove check_defconfig
-              sed -i 's/check_defconfig//' ./common/build.config.gki
+              echo "CONFIG_CRYPTO_ZSTDN=m" >> "$CONFIG_FILE"
+              echo "CONFIG_CRYPTO_LZ4K_OPLUS=n" >> "$CONFIG_FILE"
             fi
           fi
 
@@ -319,7 +394,7 @@ jobs:
           fi
 
           # 可选复制其它新文件（如果存在）
-          if [ "${{ github.event.inputs.CPUD }}" = "sm8750" ]; then
+          if [ "${{ github.event.inputs.CPU }}" = "sm8750" ]; then
           for file in dtbo.img system_dlkm.erofs.img vendor_dlkm.img vendor_boot.img; do
             if [ -f "$dir1$file" ]; then
               target_name="$file"
@@ -335,6 +410,7 @@ jobs:
           fi
 
       - name: Apply patch_linux and replace Image
+        if: ${{ github.event.inputs.KPM == 'true' }}
         run: |
           cd kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.BUILD_METHOD }}/dist
           curl -LO https://raw.githubusercontent.com/Numbersf/Action-Build/main/patch_linux
@@ -373,7 +449,7 @@ jobs:
       - name: Set suffix
         id: suffix
         run: |
-          echo "value=${{ github.event.inputs.VFS == 'true' && '_VFS' || '' }}${{ github.event.inputs.LZ4 == 'true' && '_LZ4KD' || '' }}" >> $GITHUB_OUTPUT
+          echo "value=${{ github.event.inputs.KPM == 'true' && '_KPM' || '' }}${{ github.event.inputs.VFS == 'true' && '_VFS' || '' }}${{ github.event.inputs.ZRAM == 'true' && '_LZ4KD_ZSTDN' || '' }}" >> $GITHUB_OUTPUT
 
       - name: Remove _uv suffix from FEIL
         id: feil_clean
@@ -386,5 +462,5 @@ jobs:
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-          name: AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.feil_clean.outputs.value }}_KPM${{ steps.suffix.outputs.value }}
+          name: AnyKernel3_SukiSUUltra_${{ env.KSUVER }}_${{ steps.feil_clean.outputs.value }}${{ steps.suffix.outputs.value }}
           path: ./AnyKernel3/*
