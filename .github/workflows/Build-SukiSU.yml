@@ -6,7 +6,7 @@ on:
         type: choice
         description: "分支"
         required: true
-        default: sm8550
+        default: sm8650
         options:
           - sm7550
           - sm7675
@@ -19,9 +19,9 @@ on:
         type: choice
         description: "配置文件"
         required: true
-        default: oneplus_ace2pro_v
+        default: gt5pro
         options:
-          - oneplus_nord_ce4_v
+          - gt5pro
           - oneplus_ace_3v_v
           - oneplus_nord_4_v
           - oneplus_10_pro_v
@@ -46,7 +46,7 @@ on:
         type: choice
         description: "处理器代号"
         required: true
-        default: kalama
+        default: pineapple
         options:
           - crow
           - waipio
@@ -57,7 +57,7 @@ on:
         type: choice
         description: "内核安卓版本"
         required: true
-        default: android13
+        default: android14
         options:
           - android12
           - android13
@@ -67,7 +67,7 @@ on:
        type: choice
        description: "内核版本"
        required: true
-       default: "5.15"
+       default: "6.1"
        options:
          - "5.10"
          - "5.15"
@@ -150,7 +150,7 @@ jobs:
       - name: Initialize repo and sync
         run: |
           mkdir kernel_workspace && cd kernel_workspace
-          repo init -u https://github.com/OnePlusOSS/kernel_manifest.git -b refs/heads/oneplus/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
+          repo init -u https://github.com/ferstar/kernel_manifest.git -b realme/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
           repo sync
           if [  -e kernel_platform/common/BUILD.bazel ]; then
           sed -i '/^[[:space:]]*"protected_exports_list"[[:space:]]*:[[:space:]]*"android\/abi_gki_protected_exports_aarch64",$/d' kernel_platform/common/BUILD.bazel
