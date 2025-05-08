@@ -231,7 +231,17 @@ jobs:
             echo "正在打lz4kd补丁"
             patch -p1 -F 3 < lz4kd.patch || true
             echo '完成LZ4KD补丁'
+          fi
+          REPO_PATCHES="../../.repo/manifests/patches"
+          for PATCH in 001-lz4.patch 002-zstd.patch; do
+            if [ ! -f "${REPO_PATCHES}/${PATCH}" ]; then
+             echo "错误：${PATCH} 不存在于 ${REPO_PATCHES}"
+             exit 1
             fi
+            echo "正在应用通用补丁 ${PATCH}..."
+            patch -p1 < "${REPO_PATCHES}/${PATCH}" || { echo "错误：${PATCH} 应用失败"; exit 1; }
+            echo "完成 ${PATCH}"
+          done
 
       # 配置信息
       - name: Add Configuration Settings
