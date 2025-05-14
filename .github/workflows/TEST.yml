@@ -167,7 +167,7 @@ jobs:
       - name: Build kernel
         run: |
           cd kernel_workspace
-          ./kernel_platform/build_with_bazel.py -t ${{ github.event.inputs.CPUD }} 
+          ./kernel_platform/build_with_bazel.py -t ${{ github.event.inputs.CPUD }} gki 
 
       - name: Make AnyKernel3
         run: |
