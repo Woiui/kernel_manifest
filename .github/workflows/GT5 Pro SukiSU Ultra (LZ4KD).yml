@@ -105,13 +105,14 @@ jobs:
          git commit -m "Force remove -dirty suffix from kernel version"
           
       - name: Set up SukiSU Ultra
+        id: set_ksuver
         run: |
           cd kernel_workspace/kernel_platform
           curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-dev
           cd ./KernelSU
           KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10606)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          export KSU_VERSION=$KSU_VERSION
+          echo "version=$KSU_VERSION" >> $GITHUB_OUTPUT
           sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
           
       - name: Set up SUSFS
@@ -243,14 +244,19 @@ jobs:
       - name: Upload AnyKernel3 with lz4kd
         uses: actions/upload-artifact@v4
         with:
-         name: AnyKernel3_SukiSU_Ultra_lz4kd_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
+         name: AnyKernel3_SukiSU_Ultra_lz4kd_${{ needs.build.outputs.ksuver }}_${{ github.event.inputs.FEIL }}
          path: ./AnyKernel3/*
          
       - name: Upload Image
         uses: actions/upload-artifact@v4
         with:
-         name: Image_KernelSU_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
+         name: Image_KernelSU_${{ needs.build.outputs.ksuver }}_${{ github.event.inputs.FEIL }}
          path: kernel_workspace/kernel
+      - name: Debug Variables in Build
+        run: |
+          echo "KSUVER (env): ${{ env.KSUVER }}"
+          echo "KSUVER (output): ${{ steps.set_ksuver.outputs.version }}"
+          echo "FEIL: ${{ github.event.inputs.FEIL }}"
          
   release:
     name: Create Release
@@ -261,10 +267,19 @@ jobs:
       actions: read
 
     steps:
+      - name: Get current date
+        id: get-date
+        run: echo "date=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Debug Variables in Release
+        run: |
+          echo "KSUVER from build: ${{ needs.build.outputs.ksuver }}"
+          echo "FEIL: ${{ github.event.inputs.FEIL }}"
+          
       - name: 下载构建产物
         uses: actions/download-artifact@v4
         with:
-          name: AnyKernel3_SukiSU_Ultra_lz4kd_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
+          name: AnyKernel3_SukiSU_Ultra_lz4kd_${{ needs.build.outputs.ksuver }}_${{ github.event.inputs.FEIL }}
           path: ./release_zips
 
       - name: 创建GitHub发布
