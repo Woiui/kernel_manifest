@@ -39,7 +39,7 @@ on:
         default: '6.1'
         
   schedule:            
-    - cron: '0 0 0/4 * * ? '  
+    - cron: '0 0 0/4 * * * '  
 env:
   RETENTION_COUNT: 7    # 保留的发布版本数量
   KERNEL_DIR: "kernel_workspace/kernel_platform"
