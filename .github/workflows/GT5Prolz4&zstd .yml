@@ -1,4 +1,4 @@
-name: Build GT5Pro SukiSU Ultra LZ4KD&ZSTDN
+name: Build GT5Pro SukiSU Ultra lz4&zstd
 on:
   workflow_dispatch:
     inputs:
