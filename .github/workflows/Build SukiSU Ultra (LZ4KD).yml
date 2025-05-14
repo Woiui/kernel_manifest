@@ -18,7 +18,7 @@ on:
         required: true
         type: choice
         options:
-          - 'oneplus12_v'
+          - 'gt5pro'
           - 'oneplus_ace3_pro_v'
           - 'oneplus_ace5'
           - 'oneplus_pad2_v'
