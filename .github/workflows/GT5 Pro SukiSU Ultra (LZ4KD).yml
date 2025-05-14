@@ -230,7 +230,7 @@ jobs:
           
       - name: Download Latest lz4kd Module from Release
         run: |
-          wget wget https://github.com/Woiui/kernel_manifest/raw/dc03bc47133f6431213d6e195834e5da09104c30/patches/zram.zip
+          wget https://github.com/Woiui/kernel_manifest/raw/dc03bc47133f6431213d6e195834e5da09104c30/patches/zram.zip
           cp zram.zip ./AnyKernel3/       
             
       - name: Remove _uv suffix from FEIL
