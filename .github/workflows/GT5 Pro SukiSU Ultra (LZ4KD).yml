@@ -264,7 +264,7 @@ jobs:
       - name: 下载构建产物
         uses: actions/download-artifact@v4
         with:
-          name: AnyKernel3_SukiSU_Ultra_lz4kd_${{ needs.build.outputs.ksuver }}_${{ github.event.inputs.FEIL }}
+          name: AnyKernel3_SukiSU_Ultra_lz4kd_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
           path: ./release_zips
 
       - name: 创建GitHub发布
