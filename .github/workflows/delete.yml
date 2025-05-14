@@ -1,116 +1,178 @@
-name: 清理工作流运行记录
+name: Build OnePlus SukiSU Ultra (LZ4KD) - Optimized
 
 on:
   workflow_dispatch:
     inputs:
-      repo:
-        description: '清理的仓库(格式:用户名/仓库名)'
+      CPU:
+        description: "CPU Platform"
         required: true
-        default: 'Numbersf/Action-Build'
-      workflow_name:
-        description: '清理的工作流名称'
+        type: choice
+        options: ['sm8650']
+        default: 'sm8650'
+      FEIL:
+        description: "Device Model"
         required: true
-        default: 'Build OnePlus_SukiSU Ultra All'
-      count:
-        description: '检查的最多运行次数'
-        required: false
-        default: '20'
-      delete_failed:
-        description: '删除失败的运行记录？'
-        required: false
-        type: boolean
-        default: true
-      delete_success:
-        description: '删除成功的运行记录？'
-        required: false
-        type: boolean
-        default: false
-      delete_cancelled:
-        description: '删除已取消的运行记录？'
-        required: false
-        type: boolean
-        default: false
-
-permissions:
-  actions: write
+        type: choice
+        options: ['gt5pro']
+        default: 'gt5pro'
+      CPUD:
+        description: "SoC Codename"
+        required: true
+        type: choice
+        options: ['pineapple']
+        default: 'pineapple'
+      ANDROID_VERSION:
+        description: "Android Version"
+        required: true
+        type: choice
+        options: ['android14']
+        default: 'android14'
+      KERNEL_VERSION:
+        description: "Kernel Version"
+        required: true
+        type: choice
+        options: ['6.1']
+        default: '6.1'
 
 jobs:
-  cleanup:
+  build:
+    name: Build ${{ github.event.inputs.FEIL }}
     runs-on: ubuntu-latest
+    env:
+      WORKSPACE: ${{ github.workspace }}/kernel_workspace
+      KERNEL_DIR: ${{ github.workspace }}/kernel_workspace/kernel_platform
+      ANY_KERNEL_DIR: ${{ github.workspace }}/AnyKernel3
 
     steps:
-      - name: 安装 GitHub CLI
-        run: sudo apt-get install gh -y
+      - name: Maximize Build Space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 12288
+          temp-reserve-mb: 4096
+          remove-dotnet: true
+          remove-android: true
+          remove-haskell: true
 
-      - name: 安装 jq（用于解析 JSON）
-        run: sudo apt-get install jq -y
-
-      - name: 使用 GITHUB_TOKEN 进行认证
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-      - name: 清理 Build OnePlus_SukiSU Ultra All 和 本工作流记录
-        env:
-          REPO: ${{ inputs.repo }}
-          COUNT: ${{ inputs.count }}
-          DELETE_FAILED: ${{ inputs.delete_failed }}
-          DELETE_SUCCESS: ${{ inputs.delete_success }}
-          DELETE_CANCELLED: ${{ inputs.delete_cancelled }}
-          WORKFLOW_NAME: ${{ inputs.workflow_name }}
-          CURRENT_RUN_ID: ${{ github.run_id }}
+      - name: Setup Git Identity
         run: |
-          set -e
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
 
-          # === 清理指定工作流（保留你原来的逻辑） ===
-          echo "正在查找工作流 \"$WORKFLOW_NAME\" 的 ID..."
-          WORKFLOW_ID=$(gh api repos/$REPO/actions/workflows | jq -r ".workflows[] | select(.name == \"$WORKFLOW_NAME\") | .id")
+      - name: Install Essential Packages
+        run: |
+          sudo apt update && sudo apt full-upgrade -y
+          sudo apt install -y \
+            python3 python3-pip git curl \
+            build-essential flex bison libssl-dev \
+            rsync unzip bc libelf-dev
 
-          if [ -z "$WORKFLOW_ID" ]; then
-            echo "未找到名为 \"$WORKFLOW_NAME\" 的工作流！"
-            exit 1
-          fi
+      - name: Install Repo Tool
+        run: |
+          sudo curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo \
+            -o /usr/local/bin/repo
+          sudo chmod a+rx /usr/local/bin/repo
 
-          echo "找到工作流 ID: $WORKFLOW_ID"
-          echo "正在获取最近 $COUNT 条运行记录..."
+      - name: Initialize Kernel Source
+        working-directory: ${{ env.WORKSPACE }}
+        run: |
+          repo init -u https://github.com/ferstar/kernel_manifest.git \
+            -b realme/${{ github.event.inputs.CPU }} \
+            -m ${{ github.event.inputs.FEIL }}.xml \
+            --depth=1 --repo-url=https://gerrit.googlesource.com/git-repo
+          repo sync -j$(nproc) --force-sync --no-clone-bundle
 
-          RUNS=$(gh api "repos/$REPO/actions/workflows/$WORKFLOW_ID/runs?per_page=$COUNT" | jq -c '.workflow_runs[]')
+      - name: Clean Build Artifacts
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          find . -name BUILD.bazel -exec sed -i '/protected_exports_list/d' {} +
+          find . -name abi_gki_protected_exports_* -delete 2>/dev/null || true
 
-          echo "$RUNS" | while read run; do
-            ID=$(echo "$run" | jq -r '.id')
-            STATUS=$(echo "$run" | jq -r '.conclusion')
-            STATE=$(echo "$run" | jq -r '.status')
+      - name: Patch Kernel Version
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          for scm_file in $(find . -name setlocalversion); do
+            sed -i -e 's/-dirty//g' -e '/scm_version/d' $scm_file
+            echo 'res="${res/-dirty/}"' >> $scm_file
+          done
+          git add . && git commit -m "[CI] Remove dirty suffix" || true
 
-            if [[ "$STATE" == "in_progress" || "$STATE" == "queued" ]]; then
-              echo "跳过运行 ID: $ID（状态为 $STATE）"
-              continue
-            fi
+      - name: Setup KernelSU
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          bash <(curl -sL https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh) susfs-dev
+          KSU_VER=$(( $(git rev-list --count HEAD) + 10600 ))
+          echo "KSU_VER=$KSU_VER" >> $GITHUB_ENV
+          sed -i "s/DKSU_VERSION=.*/DKSU_VERSION=$KSU_VER/" kernel/Makefile
 
-            if [[ "$STATUS" == "failure" && "$DELETE_FAILED" != "true" ]]; then continue; fi
-            if [[ "$STATUS" == "success" && "$DELETE_SUCCESS" != "true" ]]; then continue; fi
-            if [[ "$STATUS" == "cancelled" && "$DELETE_CANCELLED" != "true" ]]; then continue; fi
+      - name: Apply Kernel Patches
+        working-directory: ${{ env.WORKSPACE }}
+        run: |
+          git clone --filter=blob:none --depth=1 \
+            https://gitlab.com/simonpunk/susfs4ksu.git \
+            -b gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}
+          
+          rsync -av susfs4ksu/kernel_patches/ ${{ env.KERNEL_DIR }}/common/
+          cp -rf SukiSU_patch/other/zram/lz4k/* ${{ env.KERNEL_DIR }}/common/
 
-            echo "删除运行记录 ID: $ID (状态: $STATUS)"
-            gh api -X DELETE "repos/$REPO/actions/runs/$ID" || echo "删除失败（可能权限不足或 ID 不存在）"
+          cd ${{ env.KERNEL_DIR }}/common
+          for patch_file in *.patch; do
+            patch -p1 --ignore-whitespace < $patch_file || echo "Patch $patch_file skipped"
           done
 
-          # === 清理本工作流 "清理工作流运行记录"，除当前 run 外全部删除 ===
-          echo "查找当前工作流（清理工作流运行记录）自身的 ID..."
-          SELF_WORKFLOW_ID=$(gh api repos/$REPO/actions/workflows | jq -r '.workflows[] | select(.name == "清理工作流运行记录") | .id')
-
-          if [ -z "$SELF_WORKFLOW_ID" ]; then
-            echo "未找到自身工作流 ID，跳过。"
-            exit 0
-          fi
-
-          echo "自身工作流 ID 为: $SELF_WORKFLOW_ID"
-          SELF_RUNS=$(gh api "repos/$REPO/actions/workflows/$SELF_WORKFLOW_ID/runs?per_page=50" | jq -c '.workflow_runs[]')
-
-          echo "$SELF_RUNS" | while read run; do
-            ID=$(echo "$run" | jq -r '.id')
-            if [[ "$ID" == "$CURRENT_RUN_ID" ]]; then
-              echo "跳过当前运行 ID: $ID"
-              continue
-            fi
-
-            echo "删除本工作流运行记录 ID: $ID"
-            gh api -X DELETE "repos/$REPO/actions/runs/$ID" || echo "删除失败（可能权限不足或 ID 不存在）"
+      - name: Configure Kernel Flags
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          config_file="common/arch/arm64/configs/gki_defconfig"
+          declare -A config_flags=(
+            ["KSU"]="y"
+            ["KPM"]="y"
+            ["KSU_SUSFS"]="y"
+            ["CRYPTO_LZ4HC"]="y"
+            ["CRYPTO_LZ4KD"]="y"
+          )
+          for key in "${!config_flags[@]}"; do
+            echo "CONFIG_$key=${config_flags[$key]}" >> $config_file
           done
+          sed -i '/check_defconfig/d' common/build.config.gki
+
+      - name: Build Kernel Image
+        working-directory: ${{ env.WORKSPACE }}
+        run: |
+          ./kernel_platform/build_with_bazel.py \
+            -t ${{ github.event.inputs.CPUD }} gki \
+            -j$(($(nproc) + 1)) \
+            --verbose_failures
+
+      - name: Prepare AnyKernel3
+        working-directory: ${{ env.WORKSPACE }}
+        run: |
+          git clone --depth=1 https://github.com/Woiui/AnyKernel3
+          find ./kernel_platform/out -name Image -exec cp -v {} AnyKernel3/ \;
+          curl -fL -o AnyKernel3/zram.zip \
+            https://github.com/Woiui/kernel_manifest/releases/latest/download/zram.zip
+
+      - name: Post-process Kernel Image
+        working-directory: ${{ env.WORKSPACE }}/kernel_platform/out
+        run: |
+          latest_image=$(find . -name Image -printf '%T@ %p\n' | sort -n | tail -1 | cut -f2- -d" ")
+          [ -n "$latest_image" ] && {
+            curl -sL https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.11-beta/patch_linux \
+              | sudo dd of=./patch_linux
+            chmod +x ./patch_linux
+            ./patch_linux "$latest_image"
+            mv oImage "$latest_image"
+          }
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SukiSU_${{ env.KSU_VER }}_${{ github.event.inputs.FEIL }}
+          path: |
+            ${{ env.WORKSPACE }}/AnyKernel3/*
+            ${{ env.WORKSPACE }}/kernel_platform/out/**/Image
+          retention-days: 7
+
+      - name: Cleanup Workspace
+        if: ${{ always() }}
+        run: |
+          rm -rf ${{ env.WORKSPACE }} || true
