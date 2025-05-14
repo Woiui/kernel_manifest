@@ -219,7 +219,7 @@ jobs:
           cp Image $GITHUB_WORKSPACE/AnyKernel3/Image
           cp Image $GITHUB_WORKSPACE/kernel_workspace/kernel
           
-      - name: Download Latest SUSFS Module from Release
+      - name: Download Latest lz4kd Module from Release
         run: |
           wget https://github.com/Woiui/kernel_manifest/blob/dc03bc47133f6431213d6e195834e5da09104c30/patches/zram.zip
           cp zram.zip ./AnyKernel3/       
