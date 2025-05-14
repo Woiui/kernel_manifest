@@ -37,11 +37,20 @@ on:
         options:
           - '6.1'
         default: '6.1'
+        
+  schedule:            
+    - cron: '*/30 * * * *'  
+env:
+  RETENTION_COUNT: 7    # 保留的发布版本数量
+  KERNEL_DIR: "kernel_workspace/kernel_platform"
+  GKI_CONFIG: "./common/arch/arm64/configs/gki_defconfig"
 
 jobs:
   build:
-    name: For ${{ github.event.inputs.FEIL }}
+    name: Build for ${{ github.event.inputs.FEIL }}
     runs-on: ubuntu-latest
+    outputs:  
+      ksuver: ${{ steps.set_ksuver.outputs.version }}
 
     steps:
       - name: Maximize build space
@@ -242,3 +251,50 @@ jobs:
         with:
          name: Image_KernelSU_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
          path: kernel_workspace/kernel
+         
+  release:
+    name: Create Release
+    needs: build        
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   
+      actions: read
+
+    steps:
+      - name: 下载构建产物
+        uses: actions/download-artifact@v4
+        with:
+          name: AnyKernel3_SukiSU_Ultra_lz4kd_${{ needs.build.outputs.ksuver }}_${{ inputs.FEIL }}
+          path: ./release_zips
+
+      - name: 创建GitHub发布
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "build-${{ github.run_id }}"
+          name: "真我GT5 Pro内核 Build ${{ github.run_number }}"
+          body: |
+            ## 自动编译说明
+            
+            - 机型: 真我GT5 PRO
+            - 特性：MKSU+SUSFS+VFS+KPM+lz4kd（刷入模块启用）
+            - 内核版本: ${{ needs.build.outputs.ksuver }}
+            - 编译时间: ${{ steps.get-date.outputs.date }}
+            - 推荐管理器: [SukiSU-Ultra](https://github.com/ShirkNeko/SukiSU-Ultra/releases)
+            
+            ### 刷机指引
+            1. AnyKernel3文件: 通过Recovery/TWRP刷入
+            2. Image文件: 解压后使用Fastboot刷入
+          files: |
+            release_zips/*.zip
+          draft: false
+          prerelease: false
+
+      - name: 清理旧版本
+        uses: dev-drprasad/delete-older-releases@v0.3.4
+        continue-on-error: true  
+        with:
+          keep_latest: ${{ env.RETENTION_COUNT }}
+          delete_tags: true
+          delete_tag_pattern: 'build-*'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
