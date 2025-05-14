@@ -1,4 +1,4 @@
-name: Build OnePlus SukiSU Ultra (LZ4KD)1212
+name: GT5 Pro SukiSU Ultra (LZ4KD)
 on:
   workflow_dispatch:
     inputs:
