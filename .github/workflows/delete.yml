@@ -1,4 +1,4 @@
-name: Build OnePlus SukiSU Ultra (LZ4KD) - Optimized
+name: Build OnePlus SukiSU Ultra (LZ4KD) - Stable
 
 on:
   workflow_dispatch:
@@ -41,72 +41,71 @@ jobs:
     env:
       WORKSPACE: ${{ github.workspace }}/kernel_workspace
       KERNEL_DIR: ${{ github.workspace }}/kernel_workspace/kernel_platform
-      ANY_KERNEL_DIR: ${{ github.workspace }}/AnyKernel3
 
     steps:
+      - name: Prepare Workspace
+        run: |
+          mkdir -p ${{ env.WORKSPACE }}
+          echo "Workspace created at: ${{ env.WORKSPACE }}"
+
       - name: Maximize Build Space
         uses: easimon/maximize-build-space@master
         with:
-          root-reserve-mb: 12288
-          temp-reserve-mb: 4096
+          root-reserve-mb: 14336
+          temp-reserve-mb: 6144
           remove-dotnet: true
           remove-android: true
           remove-haskell: true
 
-      - name: Setup Git Identity
+      - name: Setup Environment
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-
-      - name: Install Essential Packages
-        run: |
           sudo apt update && sudo apt full-upgrade -y
           sudo apt install -y \
             python3 python3-pip git curl \
             build-essential flex bison libssl-dev \
             rsync unzip bc libelf-dev
 
-      - name: Install Repo Tool
+      - name: Initialize Repo
         run: |
+          cd ${{ env.WORKSPACE }}
           sudo curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo \
             -o /usr/local/bin/repo
           sudo chmod a+rx /usr/local/bin/repo
-
-      - name: Initialize Kernel Source
-        working-directory: ${{ env.WORKSPACE }}
-        run: |
           repo init -u https://github.com/ferstar/kernel_manifest.git \
             -b realme/${{ github.event.inputs.CPU }} \
             -m ${{ github.event.inputs.FEIL }}.xml \
-            --depth=1 --repo-url=https://gerrit.googlesource.com/git-repo
+            --depth=1 \
+            --repo-url=https://gerrit.googlesource.com/git-repo
           repo sync -j$(nproc) --force-sync --no-clone-bundle
 
       - name: Clean Build Artifacts
-        working-directory: ${{ env.KERNEL_DIR }}
         run: |
+          cd ${{ env.KERNEL_DIR }}
           find . -name BUILD.bazel -exec sed -i '/protected_exports_list/d' {} +
           find . -name abi_gki_protected_exports_* -delete 2>/dev/null || true
 
-      - name: Patch Kernel Version
-        working-directory: ${{ env.KERNEL_DIR }}
+      - name: Patch Version Scripts
         run: |
+          cd ${{ env.KERNEL_DIR }}
           for scm_file in $(find . -name setlocalversion); do
             sed -i -e 's/-dirty//g' -e '/scm_version/d' $scm_file
             echo 'res="${res/-dirty/}"' >> $scm_file
           done
-          git add . && git commit -m "[CI] Remove dirty suffix" || true
+          git add . && git commit -m "[CI] Clean version tags" || true
 
       - name: Setup KernelSU
-        working-directory: ${{ env.KERNEL_DIR }}
         run: |
-          bash <(curl -sL https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh) susfs-dev
+          cd ${{ env.KERNEL_DIR }}
+          curl -sL https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh | bash -s susfs-dev
           KSU_VER=$(( $(git rev-list --count HEAD) + 10600 ))
           echo "KSU_VER=$KSU_VER" >> $GITHUB_ENV
           sed -i "s/DKSU_VERSION=.*/DKSU_VERSION=$KSU_VER/" kernel/Makefile
 
-      - name: Apply Kernel Patches
-        working-directory: ${{ env.WORKSPACE }}
+      - name: Apply Patches
         run: |
+          cd ${{ env.WORKSPACE }}
           git clone --filter=blob:none --depth=1 \
             https://gitlab.com/simonpunk/susfs4ksu.git \
             -b gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}
@@ -116,12 +115,12 @@ jobs:
 
           cd ${{ env.KERNEL_DIR }}/common
           for patch_file in *.patch; do
-            patch -p1 --ignore-whitespace < $patch_file || echo "Patch $patch_file skipped"
+            patch -p1 --ignore-whitespace < $patch_file || echo "Skipped: $patch_file"
           done
 
-      - name: Configure Kernel Flags
-        working-directory: ${{ env.KERNEL_DIR }}
+      - name: Configure Kernel
         run: |
+          cd ${{ env.KERNEL_DIR }}
           config_file="common/arch/arm64/configs/gki_defconfig"
           declare -A config_flags=(
             ["KSU"]="y"
@@ -131,48 +130,36 @@ jobs:
             ["CRYPTO_LZ4KD"]="y"
           )
           for key in "${!config_flags[@]}"; do
-            echo "CONFIG_$key=${config_flags[$key]}" >> $config_file
+            grep -q "CONFIG_$key" $config_file || echo "CONFIG_$key=${config_flags[$key]}" >> $config_file
           done
           sed -i '/check_defconfig/d' common/build.config.gki
 
-      - name: Build Kernel Image
-        working-directory: ${{ env.WORKSPACE }}
+      - name: Build Kernel
         run: |
+          cd ${{ env.WORKSPACE }}
           ./kernel_platform/build_with_bazel.py \
             -t ${{ github.event.inputs.CPUD }} gki \
             -j$(($(nproc) + 1)) \
             --verbose_failures
 
-      - name: Prepare AnyKernel3
-        working-directory: ${{ env.WORKSPACE }}
+      - name: Package Artifacts
         run: |
+          cd ${{ github.workspace }}
           git clone --depth=1 https://github.com/Woiui/AnyKernel3
-          find ./kernel_platform/out -name Image -exec cp -v {} AnyKernel3/ \;
+          find ${{ env.WORKSPACE }} -name Image -exec cp -v {} AnyKernel3/ \;
           curl -fL -o AnyKernel3/zram.zip \
             https://github.com/Woiui/kernel_manifest/releases/latest/download/zram.zip
-
-      - name: Post-process Kernel Image
-        working-directory: ${{ env.WORKSPACE }}/kernel_platform/out
-        run: |
-          latest_image=$(find . -name Image -printf '%T@ %p\n' | sort -n | tail -1 | cut -f2- -d" ")
-          [ -n "$latest_image" ] && {
-            curl -sL https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.11-beta/patch_linux \
-              | sudo dd of=./patch_linux
-            chmod +x ./patch_linux
-            ./patch_linux "$latest_image"
-            mv oImage "$latest_image"
-          }
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SukiSU_${{ env.KSU_VER }}_${{ github.event.inputs.FEIL }}
+          name: Kernel_${{ env.KSU_VER }}_${{ github.event.inputs.FEIL }}
           path: |
-            ${{ env.WORKSPACE }}/AnyKernel3/*
+            ${{ github.workspace }}/AnyKernel3/*
             ${{ env.WORKSPACE }}/kernel_platform/out/**/Image
-          retention-days: 7
+          retention-days: 3
 
-      - name: Cleanup Workspace
+      - name: Post Cleanup
         if: ${{ always() }}
         run: |
           rm -rf ${{ env.WORKSPACE }} || true
