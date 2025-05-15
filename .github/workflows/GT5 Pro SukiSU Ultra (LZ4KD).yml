@@ -38,13 +38,6 @@ on:
           - '6.1'
         default: '6.1'
         
-  schedule:            
-    - cron: '0 */4 * * * '  
-env:
-  RETENTION_COUNT: 7    # 保留的发布版本数量
-  KERNEL_DIR: "kernel_workspace/kernel_platform"
-  GKI_CONFIG: "./common/arch/arm64/configs/gki_defconfig"
-
 jobs:
   build:
     name: Build for ${{ github.event.inputs.FEIL }}
@@ -107,7 +100,6 @@ jobs:
          git commit -m "Force remove -dirty suffix from kernel version"
           
       - name: Set up SukiSU Ultra
-        id: set_ksuver
         run: |
           cd kernel_workspace/kernel_platform
           curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-dev
@@ -260,58 +252,3 @@ jobs:
           echo "KSUVER (output): ${{ steps.set_ksuver.outputs.version }}"
           echo "FEIL: ${{ github.event.inputs.FEIL }}"
          
-  release:
-    name: Create Release
-    needs: build        
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write   
-      actions: read
-
-    steps:
-      - name: Get current date
-        id: get-date
-        run: echo "date=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
-
-      - name: Debug Variables in Release
-        run: |
-          echo "KSUVER from build: ${{ env.KSUVER }}"
-          echo "FEIL: ${{ github.event.inputs.FEIL }}"
-          
-      - name: 下载构建产物
-        uses: actions/download-artifact@v4
-        with:
-          name: AnyKernel3_SukiSU_Ultra_lz4kd_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
-          path: ./release_zips
-
-      - name: 创建GitHub发布
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: "build-${{ github.run_id }}"
-          name: "真我GT5 Pro内核 Build ${{ github.run_number }}"
-          body: |
-            ## 自动编译说明
-            
-            - 机型: 真我GT5 PRO
-            - 特性：MKSU+SUSFS+VFS+KPM+lz4kd（刷入模块启用）
-            - 内核版本: ${{ needs.build.outputs.ksuver }}
-            - 编译时间: ${{ steps.get-date.outputs.date }}
-            - 推荐管理器: [SukiSU-Ultra](https://github.com/ShirkNeko/SukiSU-Ultra/releases)
-            
-            ### 刷机指引
-            1. AnyKernel3文件: 通过Recovery/TWRP刷入
-            2. Image文件: 解压后使用Fastboot刷入
-          files: |
-            release_zips/*.zip
-          draft: false
-          prerelease: false
-
-      - name: 清理旧版本
-        uses: dev-drprasad/delete-older-releases@v0.3.4
-        continue-on-error: true  
-        with:
-          keep_latest: ${{ env.RETENTION_COUNT }}
-          delete_tags: true
-          delete_tag_pattern: 'build-*'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
