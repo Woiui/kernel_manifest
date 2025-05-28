@@ -15,6 +15,7 @@ on:
         type: choice
         options:
           - 'gt5pro'
+          - 'gt5proxx'
         default: 'gt5pro'
       CPUD:
         description: "处理器代号"
