@@ -14,6 +14,7 @@ on:
         required: true
         type: choice
         options:
+          - 'gt5proR'
           - 'gt5pro'
           - 'gt5proxx'
         default: 'gt5pro'
