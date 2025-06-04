@@ -5,29 +5,26 @@ on:
       KERNEL_SUFFIX:
         description: '内核名称修改(可改中文和emoji)'
         required: true
-        default: '-FutabaWa'
+        default: '-酷安FutabaWa'
       KERNEL_TIME:
-       description: "内核构建日期更改(默认为原厂)"
-       required: true
-       default: 'Wed Dec 4 02:11:46 UTC 2024'
+        description: "内核构建日期更改(默认为原厂)"
+        required: true
+        default: 'Wed Dec 4 02:11:46 UTC 2024'
       enable_feature_x:
-       description: "是否启用kpm"
-       required: false
-       default: false
-       type: boolean
+        description: "是否启用kpm"
+        required: false
+        default: false
+        type: boolean
       enable_feature_y:
-       description: "是否启用lz4kd"
-       required: false
-       default: false
-       type: boolean
+        description: "是否启用lz4kd"
+        required: false
+        default: false
+        type: boolean
       enable_feature_z:
-       description: "是否添加风驰驱动"
-       required: false
-       default: false
-       type: boolean
-      
-       
-
+        description: "是否添加风驰驱动"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build:
@@ -51,14 +48,14 @@ jobs:
           
       - name: Configure Git
         run: |
-         git config --global user.name "Futaba"
-         git config --global user.email "3199167602@qq.com"
+          git config --global user.name "Futaba"
+          git config --global user.email "3199167602@qq.com"
 
       - name: Install dependencies
         run: |
           sudo apt update && sudo apt upgrade -y
-          sudo apt install -y python3 git curl
-          sudo apt install -y python3 git curl ccache
+          sudo apt install -y python3 git curl ccache libssl-dev ncurses-dev bison flex libelf-dev zlib1g-dev
+          sudo apt install -y liblz4-dev lz4
 
       - name: Restore ccache
         uses: actions/cache@v3
@@ -70,76 +67,171 @@ jobs:
 
       - name: Install repo tool
         run: |
-         curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
-         chmod a+x ~/repo
-         sudo mv ~/repo /usr/local/bin/repo
+          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
+          chmod a+x ~/repo
+          sudo mv ~/repo /usr/local/bin/repo
 
       - name: Initialize repo and sync
         run: |
-         mkdir kernel_workspace && cd kernel_workspace
-         repo init -u https://github.com/Woiui/kernel_manifest.git -b realme/sm8650 -m gt5proR.xml --depth=1
-         repo --trace sync -c -j$(nproc --all) --no-tags
-         rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
-         rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
+          mkdir kernel_workspace && cd kernel_workspace
+          repo init -u https://github.com/Woiui/kernel_manifest.git -b realme/sm8650 -m gt5proR.xml --depth=1
+          repo --trace sync -c -j$(nproc --all) --no-tags
+          rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
+          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
          
       - name: Set up SukiSU
         run: |
-         cd kernel_workspace/kernel_platform
-         curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-dev
-         cd ./KernelSU
-         KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10606)
-         echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-         export KSU_VERSION=$KSU_VERSION
-         sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
+          cd kernel_workspace/kernel_platform
+          curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-dev
+          cd ./KernelSU
+          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10606)
+          echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+          export KSU_VERSION=$KSU_VERSION
+          sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
       
-        
       - name: Set up susfs
         run: |
-           cd kernel_workspace
-           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android14-6.1
-           git clone https://github.com/ShirkNeko/SukiSU_patch.git
+          cd kernel_workspace
+          git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-android14-6.1
+          git clone https://github.com/ShirkNeko/SukiSU_patch.git
 
-           cd kernel_platform        
-           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch ./common/
-           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
-           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-           #lz4k
-           cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
-           cp -r ../SukiSU_patch/other/zram/lz4k/lib/* ./common/lib
-           cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./common/crypto
-           cp -r ../SukiSU_patch/other/zram/lz4k_oplus ./common/lib/
-           # Apply patches
-           cd ./common
+          cd kernel_platform        
+          cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-android14-6.1.patch ./common/
+          cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
+          cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+          
+          # lz4k
+          cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
+          cp -r ../SukiSU_patch/other/zram/lz4k/lib/* ./common/lib
+          cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./common/crypto
+          cp -r ../SukiSU_patch/other/zram/lz4k_oplus ./common/lib/
+          
+          # Apply patches
+          cd ./common
+          sed -i 's/-32,12 +32,38/-32,11 +32,37/g' 50_add_susfs_in_gki-android14-6.1.patch
+          sed -i '/#include <trace\/hooks\/fs.h>/d' 50_add_susfs_in_gki-android14-6.1.patch
 
-           sed -i 's/-32,12 +32,38/-32,11 +32,37/g' 50_add_susfs_in_gki-android14-6.1.patch
-           sed -i '/#include <trace\/hooks\/fs.h>/d' 50_add_susfs_in_gki-android14-6.1.patch
+          # 严格检查补丁应用结果
+          if ! patch -p1 --forward --no-backup-if-mismatch < 50_add_susfs_in_gki-android14-6.1.patch; then
+            echo "SUSFS patch failed! Attempting partial apply..."
+            patch -p1 -F 3 < 50_add_susfs_in_gki-android14-6.1.patch || exit 1
+          fi
+          
+          cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
+          if ! patch -p1 --forward --no-backup-if-mismatch < syscall_hooks.patch; then
+            echo "Syscall hooks patch failed! Attempting partial apply..."
+            patch -p1 -F 3 < syscall_hooks.patch || exit 1
+          fi
+          echo "补丁应用完成"
+      
+      - name: Apply HMBird GKI patch
+        run: |
+          cd kernel_workspace/kernel_platform/common/drivers
+          cat << 'EOF' > hmbird_patch.c
+          #include <linux/init.h>
+          #include <linux/module.h>
+          #include <linux/of.h>
+          #include <linux/slab.h>
+          #include <linux/string.h>
 
-           patch -p1 < 50_add_susfs_in_gki-android14-6.1.patch || true
-           cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
-           patch -p1 -F 3 < syscall_hooks.patch
-           echo "完成"
- 
+          static int __init hmbird_patch_init(void)
+          {
+              struct device_node *ver_np;
+              const char *type;
+              int ret;
+
+              ver_np = of_find_node_by_path("/soc/oplus,hmbird/version_type");
+              if (!ver_np) {
+                  pr_info("hmbird_patch: version_type node not found\n");
+                  return 0;
+              }
+
+              ret = of_property_read_string(ver_np, "type", &type);
+              if (ret) {
+                  pr_info("hmbird_patch: type property not found\n");
+                  of_node_put(ver_np);
+                  return 0;
+              }
+
+              if (strcmp(type, "HMBIRD_OGKI")) {
+                  of_node_put(ver_np);
+                  return 0;
+              }
+
+              struct property *prop = of_find_property(ver_np, "type", NULL);
+              if (prop) {
+                  struct property *new_prop = kmalloc(sizeof(*prop), GFP_KERNEL);
+                  if (!new_prop) {
+                      pr_info("hmbird_patch: kmalloc for new_prop failed\n");
+                      of_node_put(ver_np);
+                      return 0;
+                  }
+                  memcpy(new_prop, prop, sizeof(*prop));
+                  new_prop->value = kmalloc(strlen("HMBIRD_GKI") + 1, GFP_KERNEL);
+                  if (!new_prop->value) {
+                      pr_info("hmbird_patch: kmalloc for new_prop->value failed\n");
+                      kfree(new_prop);
+                      of_node_put(ver_np);
+                      return 0;
+                  }
+                  strcpy(new_prop->value, "HMBIRD_GKI");
+                  new_prop->length = strlen("HMBIRD_GKI") + 1;
+
+                  if (of_remove_property(ver_np, prop) != 0) {
+                      pr_info("hmbird_patch: of_remove_property failed\n");
+                      return 0;
+                  }
+                  if (of_add_property(ver_np, new_prop) !=0) {
+                      pr_info("hmbird_patch: of_add_property failed\n");
+                      return 0;
+                  }
+                  pr_info("hmbird_patch: success from HMBIRD_OGKI to HMBIRD_GKI\n");
+              }
+              else {
+                  pr_info("hmbird_patch: type property structure not found\n");
+              }
+              of_node_put(ver_np);
+              return 0;
+          }
+          early_initcall(hmbird_patch_init);
+          MODULE_LICENSE("GPL");
+          MODULE_AUTHOR("reigadegr");
+          MODULE_DESCRIPTION("Forcefully convert HMBIRD_OGKI to HMBIRD_GKI.");
+          EOF
+          
+          if ! grep -q "hmbird_patch.o" Makefile; then
+            echo "obj-y += hmbird_patch.o" >> Makefile
+          fi
+          cd ../../../
+          git add -A
+          git commit -m "Add HMBird GKI patch" || true
+
       - name: Apply lz4kd Patches
-        if: ${{inputs.enable_feature_y }}
+        if: ${{ inputs.enable_feature_y }}
         run: |
           cd kernel_workspace/kernel_platform/common
-            cp ../../SukiSU_patch/other/zram/zram_patch/6.1/lz4kd.patch ./
-            patch -p1 -F 3 < lz4kd.patch || true
+          cp ../../SukiSU_patch/other/zram/zram_patch/6.1/lz4kd.patch ./
+          if ! patch -p1 --forward --no-backup-if-mismatch < lz4kd.patch; then
+            echo "lz4kd patch failed! Attempting partial apply..."
+            patch -p1 -F 3 < lz4kd.patch || exit 1
+          fi
            
       - name: Add SUSFS Configuration Settings
         run: |
           cd kernel_workspace/kernel_platform
+          # 确保配置目录存在
+          mkdir -p ./common/arch/arm64/configs
+          
+          # 核心KSU配置
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
-
-          # Add VFS configuration settings
+          echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
+          
+          # 优化SUSFS配置
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig
-          
-          # Add SUSFS configuration settings
-          echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_PATH=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_PATH=n" >> ./common/arch/arm64/configs/gki_defconfig
+          echo "CONFIG_KSU_SUSFS_SUS_MOUNT=n" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SUS_KSTAT=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -152,70 +244,96 @@ jobs:
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
           
+          # 压缩算法配置
+          echo "CONFIG_CRYPTO_LZ4=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CRYPTO_LZ4HC=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CRYPTO_LZ4K=y" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_CRYPTO_LZ4KD=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_CRYPTO_842=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_LOCALVERSION_AUTO=n" >> ./common/arch/arm64/configs/gki_defconfig
           
-          #Remove check_defconfig
-          sudo sed -i 's/check_defconfig//' ./common/build.config.gki
+          # 禁用检查以避免配置错误
+          if grep -q "check_defconfig" ./common/build.config.gki; then
+            sed -i 's/check_defconfig//' ./common/build.config.gki
+          fi
+          
           cd common
-          git add -A && git commit -a -m "BUILD Kernel"
+          git add -A && git commit -a -m "优化内核配置" || true
       
       - name: Add KPM Configuration Settings
-        if: ${{inputs.enable_feature_x }}
+        if: ${{ inputs.enable_feature_x }}
         run: |
           cd kernel_workspace/kernel_platform
           echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
-         
-          #Remove check_defconfig
-          sudo sed -i 's/check_defconfig//' ./common/build.config.gki
           cd common
-          git add -A && git commit -a -m "BUILD Kernel"
+          git add -A && git commit -a -m "启用KPM支持" || true
           
       - name: Add make name
         run: |
-         cd kernel_workspace/kernel_platform
-         sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
-         sudo sed -i 's/-4k/${{ github.event.inputs.KERNEL_SUFFIX }}/g' ./common/arch/arm64/configs/gki_defconfig
+          cd kernel_workspace/kernel_platform
+          # 修复内核版本设置
+          sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
+          sed -i 's/-4k/${{ github.event.inputs.KERNEL_SUFFIX }}/g' ./common/arch/arm64/configs/gki_defconfig
+          sed -i "s/CONFIG_LOCALVERSION=.*/CONFIG_LOCALVERSION=\"${{ github.event.inputs.KERNEL_SUFFIX }}\"/" ./common/arch/arm64/configs/gki_defconfig
         
       - name: Add sched_ext
-        if: ${{inputs.enable_feature_z }}
+        if: ${{ inputs.enable_feature_z }}
         run: |
-         cd kernel_workspace/kernel_platform/
-         git clone https://github.com/HanKuCha/sched_ext.git
-         cp -r ./sched_ext/* ./common/kernel/sched
-         rm -rf ./sched_ext/.git
-         cd common/kernel/sched  
+          cd kernel_workspace/kernel_platform/
+          git clone https://github.com/HanKuCha/sched_ext.git
+          cp -r ./sched_ext/* ./common/kernel/sched
+          rm -rf ./sched_ext/.git
+          cd common/kernel/sched
+          git add -A && git commit -a -m "添加风驰驱动" || true
 
       - name: Build Kernel
         run: |
           export KBUILD_BUILD_TIMESTAMP="${{ github.event.inputs.KERNEL_TIME }}"
           export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/prebuilts/clang/host/linux-x86/clang-r510928/bin:$PATH"
           export PATH="/usr/lib/ccache:$PATH"
-          sudo apt install libelf-dev
+          
           cd kernel_workspace/kernel_platform/common
-          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld  HOSTLD=ld.lld O=out KCFLAGS+=-O2 gki_defconfig all
+          
+          # 清理构建环境
+          make clean || true
+          
+          # 配置阶段
+          make LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+               CC=clang O=out gki_defconfig
+          
+          # 完整构建（减少并行任务数避免内存不足）
+          make -j$(($(nproc)/2)) LLVM=1 ARCH=arm64 \
+               CROSS_COMPILE=aarch64-linux-gnu- CC=clang \
+               RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc \
+               PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole \
+               LD=ld.lld HOSTLD=ld.lld O=out \
+               KCFLAGS+="-Wno-error -O2" \
+               V=1  # 启用详细输出
+          
+          # 验证构建结果
+          if [ ! -f out/arch/arm64/boot/Image ]; then
+            echo "构建失败：未找到内核镜像"
+            exit 1
+          fi
           
       - name: Apply Linux Patch
         run: |
-         cd kernel_workspace/kernel_platform/common/out/arch/arm64/boot
-         curl -LO https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.11-beta/patch_linux
-         chmod +x patch_linux
-         ./patch_linux
-         rm -f Image
-         mv oImage Image
+          cd kernel_workspace/kernel_platform/common/out/arch/arm64/boot
+          curl -LO https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.11-beta/patch_linux
+          chmod +x patch_linux
+          ./patch_linux
+          rm -f Image
+          mv oImage Image
          
       - name: Make AnyKernel3
         run: |
-         git clone https://github.com/Kernel-SU/AnyKernel3.git --depth=1      
-         rm -rf ./AnyKernel3/.git
-         rm -rf ./AnyKernel3/push.sh
-         cp kernel_workspace/kernel_platform/common/out/arch/arm64/boot/Image ./AnyKernel3/
+          git clone https://github.com/Kernel-SU/AnyKernel3.git --depth=1      
+          rm -rf ./AnyKernel3/.git
+          rm -rf ./AnyKernel3/push.sh
+          cp kernel_workspace/kernel_platform/common/out/arch/arm64/boot/Image ./AnyKernel3/
+          echo "构建完成时间: $(date)" > ./AnyKernel3/build-info.txt
 
       - name: Upload AnyKernel3
         uses: actions/upload-artifact@v4
         with:
-         name: SuKiSu_${{ env.KSUVER }}_oneplus_ace5_pro
-         path: ./AnyKernel3/*
+          name: SuKiSu_${{ env.KSUVER }}_oneplus_ace5_pro
+          path: ./AnyKernel3/*
