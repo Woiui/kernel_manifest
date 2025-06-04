@@ -58,7 +58,7 @@ jobs:
         run: |
           sudo apt update && sudo apt upgrade -y
           sudo apt install -y python3 git curl
-          sudo apt install -y python3 git curl ccache lld libelf-dev
+          sudo apt install -y python3 git curl ccache
 
       - name: Restore ccache
         uses: actions/cache@v3
@@ -77,7 +77,7 @@ jobs:
       - name: Initialize repo and sync
         run: |
          mkdir kernel_workspace && cd kernel_workspace
-         repo init -u https://github.com/Woiui/kernel_manifest.git -b realme/sm8650 -m gt5proxx.xml --depth=1
+         repo init -u https://github.com/Woiui/kernel_manifest.git -b realme/sm8650 -m gt5proR.xml --depth=1
          repo --trace sync -c -j$(nproc --all) --no-tags
          rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
