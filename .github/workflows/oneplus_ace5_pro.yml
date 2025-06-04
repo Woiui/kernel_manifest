@@ -58,7 +58,7 @@ jobs:
         run: |
           sudo apt update && sudo apt upgrade -y
           sudo apt install -y python3 git curl
-          sudo apt install -y python3 git curl ccache
+          sudo apt install -y python3 git curl ccache lld
 
       - name: Restore ccache
         uses: actions/cache@v3
