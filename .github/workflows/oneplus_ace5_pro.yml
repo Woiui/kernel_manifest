@@ -5,7 +5,7 @@ on:
       KERNEL_SUFFIX:
         description: '内核名称修改(可改中文和emoji)'
         required: true
-        default: '-酷安FutabaWa'
+        default: '-FutabaWa'
       KERNEL_TIME:
        description: "内核构建日期更改(默认为原厂)"
        required: true
@@ -58,7 +58,7 @@ jobs:
         run: |
           sudo apt update && sudo apt upgrade -y
           sudo apt install -y python3 git curl
-          sudo apt install -y python3 git curl ccache lld
+          sudo apt install -y python3 git curl ccache
 
       - name: Restore ccache
         uses: actions/cache@v3
@@ -118,88 +118,6 @@ jobs:
            cp ../../SukiSU_patch/hooks/syscall_hooks.patch ./
            patch -p1 -F 3 < syscall_hooks.patch
            echo "完成"
-      
-      - name: Apply HMBird GKI patch
-        run: |
-         cd kernel_workspace/kernel_platform/common/drivers
-         cat << 'EOF' > hmbird_patch.c
-         #include <linux/init.h>
-         #include <linux/module.h>
-         #include <linux/of.h>
-         #include <linux/slab.h>
-         #include <linux/string.h>
-
-         static int __init hmbird_patch_init(void)
-         {
-             struct device_node *ver_np;
-             const char *type;
-             int ret;
-
-             ver_np = of_find_node_by_path("/soc/oplus,hmbird/version_type");
-             if (!ver_np) {
-                  pr_info("hmbird_patch: version_type node not found\n");
-                  return 0;
-             }
-
-             ret = of_property_read_string(ver_np, "type", &type);
-             if (ret) {
-                  pr_info("hmbird_patch: type property not found\n");
-                  of_node_put(ver_np);
-                  return 0;
-             }
-
-             if (strcmp(type, "HMBIRD_OGKI")) {
-                  of_node_put(ver_np);
-                  return 0;
-             }
-
-             struct property *prop = of_find_property(ver_np, "type", NULL);
-             if (prop) {
-                  struct property *new_prop = kmalloc(sizeof(*prop), GFP_KERNEL);
-                  if (!new_prop) {
-                       pr_info("hmbird_patch: kmalloc for new_prop failed\n");
-                       of_node_put(ver_np);
-                       return 0;
-             }
-             memcpy(new_prop, prop, sizeof(*prop));
-             new_prop->value = kmalloc(strlen("HMBIRD_GKI") + 1, GFP_KERNEL);
-             if (!new_prop->value) {
-                  pr_info("hmbird_patch: kmalloc for new_prop->value failed\n");
-                  kfree(new_prop);
-                  of_node_put(ver_np);
-                  return 0;
-            }
-            strcpy(new_prop->value, "HMBIRD_GKI");
-            new_prop->length = strlen("HMBIRD_GKI") + 1;
-
-            if (of_remove_property(ver_np, prop) != 0) {
-                 pr_info("hmbird_patch: of_remove_property failed\n");
-                 return 0;
-            }
-            if (of_add_property(ver_np, new_prop) !=0) {
-                 pr_info("hmbird_patch: of_add_property failed\n");
-                 return 0;
-            }
-            pr_info("hmbird_patch: success from HMBIRD_OGKI to HMBIRD_GKI\n");
-         }
-         else {
-             pr_info("hmbird_patch: type property structure not found\n");
-         }
-         of_node_put(ver_np);
-         return 0;
-         }
-         early_initcall(hmbird_patch_init);
-         MODULE_LICENSE("GPL");
-         MODULE_AUTHOR("reigadegr");
-         MODULE_DESCRIPTION("Forcefully convert HMBIRD_OGKI to HMBIRD_GKI.");
-         EOF
-         if ! grep -q "hmbird_patch.o" Makefile; then
-         echo "obj-y += hmbird_patch.o" >> Makefile
-         fi
-         cd ../../../
-         git add -A
-         git commit -m "Add HMBird GKI patch" || true
-
  
       - name: Apply lz4kd Patches
         if: ${{inputs.enable_feature_y }}
