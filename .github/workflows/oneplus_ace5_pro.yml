@@ -19,7 +19,7 @@ on:
         type: choice
         options:
           - 'gt5proR'
-          - 'oneplus_ace3_pro'
+          - 'gt5proxx'
           - 'oneplus_ace5'
           - 'oneplus_pad2'
           - 'oneplus_11'
