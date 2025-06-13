@@ -19,7 +19,7 @@ on:
         type: choice
         options:
           - 'gt5proR'
-          - 'gt5proxx'
+          - 'oneplus_ace3_pro'
           - 'oneplus_ace5'
           - 'oneplus_pad2'
           - 'oneplus_11'
@@ -134,7 +134,7 @@ jobs:
       - name: ⚙️ Set up SukiSU Ultra (配置 SukiSU Ultra)
         run: |
           cd kernel_workspace/kernel_platform
-          curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-dev
+          curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
           cd ./KernelSU
           KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10606)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
@@ -153,6 +153,8 @@ jobs:
           cp ../kernel_patches/next/syscall_hooks.patch ./common/
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+          # cp ../kernel_patches/001-lz4.patch ./common/
+          # cp ../kernel_patches/002-zstd.patch ./common/
           if [ "${{ github.event.inputs.lz4kd }}" == "Open" ]; then
             # Copy lz4k from ShirkNeko
             cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
@@ -166,6 +168,8 @@ jobs:
           cp ../../kernel_patches/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch
           patch -p1 -F 3 < syscall_hooks.patch
+          # patch -p1 < 001-lz4.patch || true
+          # patch -p1 < 002-zstd.patch || true
           if [ "${{ github.event.inputs.lz4kd }}" == "Open" ]; then
             cp ../../SukiSU_patch/other/zram/zram_patch/${{ github.event.inputs.KERNEL_VERSION }}/lz4kd.patch ./
             patch -p1 -F 3 < lz4kd.patch || true
@@ -281,7 +285,7 @@ jobs:
       - name: 🛠️ KPM Patching Image Files (KPM 修补 Image 文件)
         run: |
           cd kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/dist
-          curl -LO https://github.com/ShirkNeko/SukiSU_KernelPatch_patch/releases/download/0.11.4/patch_linux
+          curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.11.4/patch_linux
           chmod +x patch_linux
           ./patch_linux
           rm -f Image
