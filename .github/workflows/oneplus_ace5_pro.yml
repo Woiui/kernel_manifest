@@ -153,8 +153,8 @@ jobs:
           cp ../kernel_patches/next/syscall_hooks.patch ./common/
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-          # cp ../kernel_patches/001-lz4.patch ./common/
-          # cp ../kernel_patches/002-zstd.patch ./common/
+          cp ../kernel_patches/001-lz4.patch ./common/
+          cp ../kernel_patches/002-zstd.patch ./common/
           if [ "${{ github.event.inputs.lz4kd }}" == "Open" ]; then
             # Copy lz4k from ShirkNeko
             cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
@@ -168,8 +168,8 @@ jobs:
           cp ../../kernel_patches/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch
           patch -p1 -F 3 < syscall_hooks.patch
-          # patch -p1 < 001-lz4.patch || true
-          # patch -p1 < 002-zstd.patch || true
+          patch -p1 < 001-lz4.patch || true
+          patch -p1 < 002-zstd.patch || true
           if [ "${{ github.event.inputs.lz4kd }}" == "Open" ]; then
             cp ../../SukiSU_patch/other/zram/zram_patch/${{ github.event.inputs.KERNEL_VERSION }}/lz4kd.patch ./
             patch -p1 -F 3 < lz4kd.patch || true
@@ -248,6 +248,7 @@ jobs:
           dir3="kernel_workspace/kernel_platform/out/msm-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.CPUD }}-gki/dist/"
           dir4="kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/gki_kernel/common/arch/arm64/boot/"
           dir5="kernel_workspace/kernel_platform/out/msm-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.CPUD }}-gki/gki_kernel/common/arch/arm64/boot/"
+          dir6="kernel_workspace/kernel_platform/common/out/arch/arm64/boot/"
           target1="./AnyKernel3/"
           target2="./kernel_workspace/kernel"
 
@@ -261,6 +262,8 @@ jobs:
             image_path="$dir4"Image
           elif find "$dir5" -name "Image" | grep -q "Image"; then
             image_path="$dir5"Image
+          elif find "$dir6" -name "Image" | grep -q "Image"; then
+            image_path="$dir6"Image
           else
             image_path=$(find "./kernel_workspace/kernel_platform/common/out/" -name "Image" | head -n 1)
           fi
