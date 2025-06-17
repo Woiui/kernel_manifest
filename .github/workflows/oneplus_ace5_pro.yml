@@ -1,4 +1,4 @@
-name: Build OnePlus SukiSU Ultra新
+name: Build OnePlus SukiSU Ultra
 on:
   workflow_dispatch:
     inputs:
@@ -63,13 +63,13 @@ on:
           - '5.10'
         default: '6.1'
       lz4kd:
-       description: "是否启用lz4kd"
+       description: "是否启用lz4kd(关闭则启用lz4 + zstd)"
        required: true
        type: choice
        options:
           - 'Open'
           - 'Close'
-       default: 'Open'
+       default: 'Close'
         
 jobs:
   build:
@@ -153,8 +153,11 @@ jobs:
           cp ../kernel_patches/next/syscall_hooks.patch ./common/
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-          cp ../kernel_patches/001-lz4.patch ./common/
-          cp ../kernel_patches/002-zstd.patch ./common/
+          if [ "${{ github.event.inputs.lz4kd }}" == "Close" ]; then
+            cp ../kernel_patches/001-lz4.patch ./common/
+            cp ../kernel_patches/lz4armv8.S ./common/lib
+            cp ../kernel_patches/002-zstd.patch ./common/
+          fi
           if [ "${{ github.event.inputs.lz4kd }}" == "Open" ]; then
             # Copy lz4k from ShirkNeko
             cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
@@ -168,8 +171,10 @@ jobs:
           cp ../../kernel_patches/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch
           patch -p1 -F 3 < syscall_hooks.patch
-          patch -p1 < 001-lz4.patch || true
-          patch -p1 < 002-zstd.patch || true
+          if [ "${{ github.event.inputs.lz4kd }}" == "Close" ]; then
+            git apply -p1 < 001-lz4.patch || true
+            patch -p1 < 002-zstd.patch || true
+          fi
           if [ "${{ github.event.inputs.lz4kd }}" == "Open" ]; then
             cp ../../SukiSU_patch/other/zram/zram_patch/${{ github.event.inputs.KERNEL_VERSION }}/lz4kd.patch ./
             patch -p1 -F 3 < lz4kd.patch || true
@@ -233,7 +238,7 @@ jobs:
             export PATH="/usr/lib/ccache:$PATH"
             sudo apt install libelf-dev
             cd kernel_workspace/kernel_platform/common
-            make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld  HOSTLD=ld.lld O=out gki_defconfig all
+            make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld  HOSTLD=ld.lld O=out KCFLAGS+=-O2 CONFIG_LTO_CLANG=y CONFIG_LTO_CLANG_THIN=y CONFIG_LTO_CLANG_FULL=n CONFIG_LTO_NONE=n gki_defconfig all
           else
             cd kernel_workspace
             LTO=thin ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ github.event.inputs.CPUD }} gki
@@ -303,7 +308,7 @@ jobs:
         if: ${{ github.event.inputs.lz4kd != 'Open' }}
         uses: actions/upload-artifact@v4
         with:
-         name: AnyKernel3_SukiSU_Ultra_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
+         name: AnyKernel3_SukiSU_Ultra_lz4_zstd_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
          path: ./AnyKernel3/*
          
       - name: 📝 Find zram.ko & crypto_zstdn.ko (查找 zram.ko & crypto_zstdn.ko)
