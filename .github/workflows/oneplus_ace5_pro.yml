@@ -21,7 +21,9 @@ on:
           - 'gt5proR'
           - 'oneplus_ace3_pro'
           - 'oneplus_ace5'
+          - 'oneplus_13r'
           - 'oneplus_pad2'
+          - 'oneplus_pad_pro'
           - 'oneplus_11'
           - 'oneplus_12r'
           - 'oneplus_ace2pro'
@@ -33,7 +35,6 @@ on:
           - 'oneplus_ace_pro'
           - 'oneplus_10_pro'
           - 'oneplus_ace_3v'
-          - ' '
         default: 'gt5proR'
       CPUD:
         description: "处理器代号"
@@ -121,7 +122,7 @@ jobs:
         run: |
          mkdir kernel_workspace && cd kernel_workspace
          repo init -u https://github.com/Woiui/kernel_manifest.git -b realme/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
-         repo sync
+         repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --force-sync
          rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
          sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
@@ -153,7 +154,7 @@ jobs:
           cp ../kernel_patches/next/syscall_hooks.patch ./common/
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
-          if [ "${{ github.event.inputs.lz4kd }}" == "Close" ]; then
+          if [ "${{ github.event.inputs.lz4kd }}" = "Close" ] && [ "${{ github.event.inputs.KERNEL_VERSION }}" = "6.1" ]; then
             cp ../kernel_patches/001-lz4.patch ./common/
             cp ../kernel_patches/lz4armv8.S ./common/lib
             cp ../kernel_patches/002-zstd.patch ./common/
@@ -171,7 +172,7 @@ jobs:
           cp ../../kernel_patches/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch
           patch -p1 -F 3 < syscall_hooks.patch
-          if [ "${{ github.event.inputs.lz4kd }}" == "Close" ]; then
+          if [ "${{ github.event.inputs.lz4kd }}" = "Close" ] && [ "${{ github.event.inputs.KERNEL_VERSION }}" = "6.1" ]; then
             git apply -p1 < 001-lz4.patch || true
             patch -p1 < 002-zstd.patch || true
           fi
@@ -181,14 +182,6 @@ jobs:
             cp ../../SukiSU_patch/other/zram/zram_patch/${{ github.event.inputs.KERNEL_VERSION }}/lz4k_oplus.patch ./
             patch -p1 -F 3 < lz4k_oplus.patch || true
           fi
-          
-      - name: 🔧 Add sched_ext (配置 风驰内核驱动)
-        run: |
-         cd kernel_workspace/kernel_platform/
-         git clone https://github.com/HanKuCha/sched_ext.git
-         cp -r ./sched_ext/* ./common/kernel/sched
-         rm -rf ./sched_ext/.git
-         cd common/kernel/sched
 
       - name: 🔧 Apply new hook & Add configuration (配置 一些内核开关)
         run: |
@@ -238,7 +231,7 @@ jobs:
             export PATH="/usr/lib/ccache:$PATH"
             sudo apt install libelf-dev
             cd kernel_workspace/kernel_platform/common
-            make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld  HOSTLD=ld.lld O=out KCFLAGS+=-O2 CONFIG_LTO_CLANG=y CONFIG_LTO_CLANG_THIN=y CONFIG_LTO_CLANG_FULL=n CONFIG_LTO_NONE=n gki_defconfig all
+            make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld  HOSTLD=ld.lld O=out CONFIG_LTO_CLANG=y CONFIG_LTO_CLANG_THIN=y CONFIG_LTO_CLANG_FULL=n CONFIG_LTO_NONE=n gki_defconfig all
           else
             cd kernel_workspace
             LTO=thin ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ github.event.inputs.CPUD }} gki
@@ -289,7 +282,7 @@ jobs:
       - name: 🛠️ KPM Patching Image Files (KPM 修补 Image 文件)
         run: |
           cd kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/dist
-          curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.11.4/patch_linux
+          curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.0/patch_linux
           chmod +x patch_linux
           ./patch_linux
           rm -f Image
@@ -304,11 +297,18 @@ jobs:
          name: AnyKernel3_SukiSU_Ultra_lz4kd_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
          path: ./AnyKernel3/*
          
-      - name: 📤 Upload AnyKernel3 (上传 AnyKernel3)
-        if: ${{ github.event.inputs.lz4kd != 'Open' }}
+      - name: 📤 Upload AnyKernel3 with lz4 & zstd (上传 AnyKernel3)
+        if: ${{ github.event.inputs.lz4kd != 'Open' && github.event.inputs.KERNEL_VERSION == '6.1' }}
         uses: actions/upload-artifact@v4
         with:
          name: AnyKernel3_SukiSU_Ultra_lz4_zstd_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
+         path: ./AnyKernel3/*
+
+      - name: 📤 Upload AnyKernel3 (上传 AnyKernel3)
+        if: ${{ github.event.inputs.lz4kd != 'Open' && github.event.inputs.KERNEL_VERSION != '6.1' }}
+        uses: actions/upload-artifact@v4
+        with:
+         name: AnyKernel3_SukiSU_Ultra_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}
          path: ./AnyKernel3/*
          
       - name: 📝 Find zram.ko & crypto_zstdn.ko (查找 zram.ko & crypto_zstdn.ko)
