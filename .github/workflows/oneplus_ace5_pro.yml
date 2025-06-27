@@ -26,7 +26,7 @@ on:
           - 'oneplus_pad_pro'
           - 'oneplus_11'
           - 'oneplus_12r'
-          - 'oneplus_ace2pro'
+          - 'oneplus_ace2_pro'
           - 'oneplus_ace3'
           - 'oneplus_open'
           - 'oneplus_10t'
@@ -63,6 +63,14 @@ on:
           - '5.15'
           - '5.10'
         default: '6.1'
+      KPM:
+       description: "是否启用KPM"
+       required: true
+       type: choice
+       options:
+           - 'Open'
+           - 'Close'
+       default: 'Open'
       lz4kd:
        description: "是否启用lz4kd(关闭则启用lz4 + zstd)"
        required: true
@@ -74,44 +82,89 @@ on:
         
 jobs:
   build:
-    name: For ${{ github.event.inputs.FEIL }} lz4kd ${{ github.event.inputs.lz4kd }}
+    name: For ${{ github.event.inputs.FEIL }} KPM ${{ github.event.inputs.KPM }} lz4kd ${{ github.event.inputs.lz4kd }} 
     runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
       CCACHE_HARDLINK: "true"
-      CCACHE_DIR: /home/runner/.ccache  
       CCACHE_MAXSIZE: 8G
     steps:
-      - name: 🚀 Maximize build space (最大化构建空间)
-        uses: easimon/maximize-build-space@master
-        with:
-          root-reserve-mb: 8192
-          temp-reserve-mb: 2048
-          remove-dotnet: 'true'
-          remove-android: 'true'
-          remove-haskell: 'true'
-          remove-codeql: 'true'
+      - name: 📊 Check disk space (构建前空间检查)
+        run: df -h
+
+      - name: ⚙️ Set cache environment (设置缓存环境)
+        run: |
+          # 创建按机型隔离的缓存目录
+          echo "CCACHE_DIR=$HOME/.ccache_${{ github.event.inputs.FEIL }}" >> $GITHUB_ENV
+          mkdir -p "$HOME/.ccache_${{ github.event.inputs.FEIL }}"
+          echo "缓存目录设置为: $HOME/.ccache_${{ github.event.inputs.FEIL }}"
 
       - name: 📦 Configure Git (设置下载账户)
         run: |
          git config --global user.name "bulid"
          git config --global user.email "2210077278@qq.com"
 
+      - name: 🛠 Configure APT caching (配置APT缓存)
+        run: |
+          APT_CACHE_DIR="$HOME/apt-cache"
+          mkdir -p "$APT_CACHE_DIR"/{archives,lists/partial}
+          echo "Dir::Cache \"$APT_CACHE_DIR\";" | sudo tee /etc/apt/apt.conf.d/90user-cache
+          echo "Dir::Cache::archives \"$APT_CACHE_DIR/archives\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
+          echo "Dir::State::lists \"$APT_CACHE_DIR/lists\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
+          echo "Acquire::Check-Valid-Until \"false\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
+          echo "Acquire::Languages \"none\";" | sudo tee -a /etc/apt/apt.conf.d/90user-cache
+          sudo chown -R $USER:$USER "$APT_CACHE_DIR"
+
+      - name: 🛠 Cache APT packages (缓存APT包)
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.HOME }}/apt-cache
+          key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/Build SukiSU Ultra.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
       - name: 📦 Install dependencies (安装依赖)
         run: |
-         sudo apt update && sudo apt upgrade -y
-         sudo apt install -y python3 git curl
-         sudo apt install -y python3 git curl ccache
-         
+          sudo rm -f /var/lib/apt/lists/lock /var/lib/dpkg/lock
+          APT_CACHE_DIR="$HOME/apt-cache"
+          mkdir -p "$APT_CACHE_DIR/lists/partial"
+          sudo apt -o Dir::Cache="$APT_CACHE_DIR" update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt -o Dir::Cache="$APT_CACHE_DIR" install -yq --no-install-recommends \
+            python3 git curl ccache libelf-dev \
+            build-essential flex bison libssl-dev \
+            libncurses-dev liblz4-tool zlib1g-dev \
+            libxml2-utils rsync unzip
+          
+          echo "✅ 依赖安装完成"
+
       - name: 📥 Restore ccache (恢复 ccache 缓存)
         uses: actions/cache@v3
         with:
-          path: /home/runner/.ccache
-          key: ccache-${{ runner.os }}-${{ github.ref }}
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-${{ runner.os }}-${{ github.ref }}-${{ github.event.inputs.FEIL }}
           restore-keys: |
+            ccache-${{ runner.os }}-${{ github.event.inputs.FEIL }}-
             ccache-${{ runner.os }}-
-            
+
+      - name: 📥 Init ccache (初始化ccache缓存)
+        run: |
+          INIT_FLAG="${{ env.CCACHE_DIR }}/.ccache_initialized"
+          if command -v ccache >/dev/null 2>&1; then
+            if [ ! -f "$INIT_FLAG" ]; then
+              echo "初始化 ccache (${{ env.CCACHE_DIR }})..."
+              mkdir -p "${{ env.CCACHE_DIR }}"
+              ccache -M ${{ env.CCACHE_MAXSIZE }}
+              touch "$INIT_FLAG"
+              echo "ccache 初始化完成"
+            else
+              echo "ccache 已初始化，跳过"
+            fi
+          else
+            echo "未安装 ccache，跳过"
+          fi
+          ccache -s
+
       - name: 📥 Install repo tool (下载repo工具)
         run: |
          curl https://storage.googleapis.com/git-repo-downloads/repo > ~/repo
@@ -223,19 +276,22 @@ jobs:
           fi
           # Remove check_defconfig
           sed -i 's/check_defconfig//' ./common/build.config.gki
-          
+    
       - name: 🔨 Build Kernel (构建内核)
         run: |
+          export PATH="/usr/lib/ccache:$PATH"
           if [ "${{ github.event.inputs.KERNEL_VERSION }}" == "6.1" ]; then
+            export KBUILD_BUILD_TIMESTAMP="Wed May 29 07:25:40 UTC 2025"
             export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747c/bin:$PATH"
-            export PATH="/usr/lib/ccache:$PATH"
             sudo apt install libelf-dev
             cd kernel_workspace/kernel_platform/common
-            make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC=clang RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld  HOSTLD=ld.lld O=out CONFIG_LTO_CLANG=y CONFIG_LTO_CLANG_THIN=y CONFIG_LTO_CLANG_FULL=n CONFIG_LTO_NONE=n gki_defconfig all
+            make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2 CONFIG_LTO_CLANG=y CONFIG_LTO_CLANG_THIN=y CONFIG_LTO_CLANG_FULL=n CONFIG_LTO_NONE=n gki_defconfig all
           else
             cd kernel_workspace
             LTO=thin ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ github.event.inputs.CPUD }} gki
           fi
+          # 显示ccache统计信息
+          ccache -s
           
       - name: 📦 Package kernel to AnyKernel3 (打包内核到 AnyKernel3)
         run: |
@@ -280,6 +336,7 @@ jobs:
           fi
          
       - name: 🛠️ KPM Patching Image Files (KPM 修补 Image 文件)
+        if: ${{ github.event.inputs.KPM == 'Open' }}
         run: |
           cd kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/dist
           curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.0/patch_linux
@@ -323,3 +380,6 @@ jobs:
         with:
           name: zram.ko
           path: ./kernel_workspace/kernel_platform/common/out/drivers/block/zram/zram.ko
+          
+      - name: 📊 Post-build disk check (构建后空间检查)
+        run: df -h
