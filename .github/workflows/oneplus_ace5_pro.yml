@@ -1,4 +1,4 @@
-name: Build OnePlus SukiSU Ultra新
+name: Build OnePlus SukiSU Ultra
 on:
   workflow_dispatch:
     inputs:
@@ -188,15 +188,38 @@ jobs:
       - name: ⚙️ Set up SukiSU Ultra (配置 SukiSU Ultra)
         run: |
           cd kernel_workspace/kernel_platform
-          curl -LSs "https://raw.githubusercontent.com/ShirkNeko/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
+          curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/main/kernel/setup.sh" | bash -s susfs-main
           cd ./KernelSU
-          KSU_VERSION=$(expr $(/usr/bin/git rev-list --count main) "+" 10700)
+          for i in {1..3}; do
+            KSU_API_VERSION=$(curl -s "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/susfs-main/kernel/Makefile" | 
+              grep -m1 "KSU_VERSION_API :=" | 
+              awk -F'= ' '{print $2}' | 
+              tr -d '[:space:]')
+            [ -n "$KSU_API_VERSION" ] && break || sleep 2
+          done
+          [ -z "$KSU_API_VERSION" ] && KSU_API_VERSION="3.1.7"
+          echo "KSU_API_VERSION=$KSU_API_VERSION" >> $GITHUB_ENV
+          VERSION_DEFINITIONS=$(cat << EOF
+          define get_ksu_version_full
+          v\\$1-SukiSU-xiaoxiaow
+          endef
+      
+          KSU_VERSION_API := $KSU_API_VERSION
+          KSU_VERSION_FULL := v$KSU_API_VERSION-SukiSU-xiaoxiaow
+          EOF
+              )
+          sed -i '/define get_ksu_version_full/,/endef/d' kernel/Makefile
+          sed -i '/KSU_VERSION_API :=/d' kernel/Makefile
+          sed -i '/KSU_VERSION_FULL :=/d' kernel/Makefile
+          awk -v def="$VERSION_DEFINITIONS" '
+            /REPO_OWNER :=/ {print; print def; inserted=1; next}
+            1
+            END {if (!inserted) print def}
+          ' kernel/Makefile > kernel/Makefile.tmp && mv kernel/Makefile.tmp kernel/Makefile
+          KSU_VERSION=$(expr $(git rev-list --count main) + 10700 2>/dev/null || echo 13000)
           echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
-          git fetch
-          KSY_VERSION_STR=$(git describe --tags $(git rev-list --tags --max-count=1))-$(git rev-parse --short HEAD)@$(git branch --show-current)
-          echo "KSUVER_STR=$KSY_VERSION_STR" >> $GITHUB_ENV
-          export KSU_VERSION=$KSU_VERSION
-          sed -i "s/DKSU_VERSION=12800/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
+          grep -A10 "REPO_OWNER" kernel/Makefile
+          grep "KSU_VERSION_FULL" kernel/Makefile
           
       - name: 🔧 Set up SUSFS (配置 SUSFS)
         run: |
@@ -392,7 +415,9 @@ jobs:
       - name: Upload to telegram
         run: |
           if [ ! -z "${{ secrets.BOT_TOKEN }}" ]; then
-            zip -q -r "AnyKernel3_SukiSU_Ultra_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}.zip" ./AnyKernel3/*
+            cd AnyKernel3
+            zip -q -r "../AnyKernel3_SukiSU_Ultra_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}.zip" ./*
+            cd ..
             pip3 install telethon
             python3 ./bot/script/buildbot.py "./AnyKernel3_SukiSU_Ultra_${{ env.KSUVER }}_${{ github.event.inputs.FEIL }}.zip"
           fi
