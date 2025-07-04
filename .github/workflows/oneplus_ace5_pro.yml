@@ -2,6 +2,7 @@ name: Build OnePlus SukiSU Ultra新
 on:
   workflow_dispatch:
     inputs:
+    
       CPU:
         description: "CPU分支"
         required: true
@@ -13,6 +14,7 @@ on:
           - 'sm8475'
           - 'sm7675'
         default: 'sm8650'
+        
       FEIL:
         description: "手机型号"
         required: true
@@ -36,6 +38,7 @@ on:
           - 'oneplus_10_pro'
           - 'oneplus_ace_3v'
         default: 'gt5proR'
+        
       CPUD:
         description: "处理器代号"
         required: true
@@ -45,6 +48,7 @@ on:
           - 'kalama'
           - 'waipio'
         default: 'pineapple'
+        
       ANDROID_VERSION:
         description: "内核安卓版本"
         required: true
@@ -54,6 +58,7 @@ on:
           - 'android13'
           - 'android12'
         default: 'android14'
+        
       KERNEL_VERSION:
         description: "内核版本"
         required: true
@@ -63,6 +68,7 @@ on:
           - '5.15'
           - '5.10'
         default: '6.1'
+        
       KPM:
        description: "是否启用KPM"
        required: true
@@ -71,6 +77,7 @@ on:
            - 'On'
            - 'Off'
        default: 'On'
+       
       lz4kd:
        description: "是否启用lz4kd(关闭则6.1系启用lz4 + zstd)"
        required: true
@@ -79,6 +86,7 @@ on:
           - 'On'
           - 'Off'
        default: 'Off'
+       
       bbr:
        description: "是否启用bbr算法(优化上行数据, 对手机日用无太大意义甚至可能负优化)"
        required: true
@@ -176,6 +184,7 @@ jobs:
         run: |
           echo "🔧 正在初始化ccache..."
           INIT_FLAG="${{ env.CCACHE_DIR }}/.ccache_initialized"
+          
           if command -v ccache >/dev/null 2>&1; then
             if [ ! -f "$INIT_FLAG" ]; then
               mkdir -p "${{ env.CCACHE_DIR }}"
@@ -205,11 +214,14 @@ jobs:
         run: |
          echo "🌐 正在初始化内核仓库..."
          mkdir kernel_workspace && cd kernel_workspace
+         
          repo init -u https://github.com/Woiui/kernel_manifest.git -b realme/${{ github.event.inputs.CPU }} -m ${{ github.event.inputs.FEIL }}.xml --depth=1
          echo "🔄 同步代码库(使用$(nproc --all)线程)..."
          repo sync -c -j$(nproc --all) --no-tags --no-clone-bundle --force-sync
+         
          rm kernel_platform/common/android/abi_gki_protected_exports_* || echo "No protected exports!"
          rm kernel_platform/msm-kernel/android/abi_gki_protected_exports_* || echo "No protected exports!"
+         
          echo "✏️ 修改版本字符串设置..."
          sed -i 's/ -dirty//g' kernel_platform/common/scripts/setlocalversion
          sed -i 's/ -dirty//g' kernel_platform/msm-kernel/scripts/setlocalversion
@@ -224,13 +236,16 @@ jobs:
         run: |
           echo "🛠️ 正在设置SukiSU Ultra..."
           mkdir -p kernel_workspace/kernel_platform
+          
           cd kernel_workspace/kernel_platform
           # 下载并执行设置脚本
           curl -LSs "https://raw.githubusercontent.com/SukiSU-Ultra/SukiSU-Ultra/susfs-main/kernel/setup.sh" | bash -s susfs-main
+          
           cd KernelSU
           echo "⬇️ 下载KernelSU设置工具..."
           curl -L -o setup.bin https://github.com/Xiaomichael/OnePlus-Actions/raw/Build/script/setup.bin
           chmod +x setup.bin
+          
           # 验证Makefile存在
           if [ ! -f "kernel/Makefile" ]; then
             echo "❌ 错误：缺少kernel/Makefile"
@@ -248,17 +263,21 @@ jobs:
           git clone https://github.com/Xiaomichael/kernel_patches.git
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
           git clone https://github.com/Lama3L9R/sukisu-quick-setup.git
+          
           cd kernel_platform
           echo "📝 复制补丁文件..."
           cp ../susfs4ksu/kernel_patches/50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch ./common/
           cp ../kernel_patches/next/syscall_hooks.patch ./common/
           cp ../susfs4ksu/kernel_patches/fs/* ./common/fs/
           cp ../susfs4ksu/kernel_patches/include/linux/* ./common/include/linux/
+          
           if [ "${{ github.event.inputs.lz4kd }}" = "Off" ] && [ "${{ github.event.inputs.KERNEL_VERSION }}" = "6.1" ]; then
             cp ../kernel_patches/zram/001-lz4.patch ./common/
             cp ../kernel_patches/zram/lz4armv8.S ./common/lib
+            # cp ../kernel_patches/zram/lz4-oneplus.patch ./common/
             cp ../kernel_patches/zram/002-zstd.patch ./common/
           fi
+          
           if [ "${{ github.event.inputs.lz4kd }}" == "On" ]; then
             # Copy lz4k from ShirkNeko
             cp -r ../SukiSU_patch/other/zram/lz4k/include/linux/* ./common/include/linux
@@ -266,17 +285,21 @@ jobs:
             cp -r ../SukiSU_patch/other/zram/lz4k/crypto/* ./common/crypto
             cp -r ../SukiSU_patch/other/zram/lz4k_oplus ./common/lib/
           fi
+          
           echo "🔧 应用补丁..."
           cd ./common
           patch -p1 < 50_add_susfs_in_gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}.patch || true
           cp ../../kernel_patches/69_hide_stuff.patch ./
           patch -p1 -F 3 < 69_hide_stuff.patch
           patch -p1 -F 3 < syscall_hooks.patch
+          
           if [ "${{ github.event.inputs.lz4kd }}" = "Off" ] && [ "${{ github.event.inputs.KERNEL_VERSION }}" = "6.1" ]; then
             echo "📦 应用lz4+zstd补丁..."
             git apply -p1 < 001-lz4.patch || true
+            # patch -p1 < lz4-oneplus.patch || true
             patch -p1 < 002-zstd.patch || true
           fi
+          
           if [ "${{ github.event.inputs.lz4kd }}" == "On" ]; then
             echo "🚀 应用lz4kd补丁..."
             cp ../../SukiSU_patch/other/zram/zram_patch/${{ github.event.inputs.KERNEL_VERSION }}/lz4kd.patch ./
@@ -284,6 +307,7 @@ jobs:
             cp ../../SukiSU_patch/other/zram/zram_patch/${{ github.event.inputs.KERNEL_VERSION }}/lz4k_oplus.patch ./
             patch -p1 -F 3 < lz4k_oplus.patch || true
           fi
+          
           # Add support for zakosu
           # cp ../sukisu-quick-setup/patches/01-add-zakosu-manager.patch ./common/
           # patch -p1 -F 3 < 01-add-zakosu-manager.patch
@@ -294,11 +318,14 @@ jobs:
           echo "⚙️ 正在配置内核编译选项..."
           cd kernel_workspace/kernel_platform
           # Add KSU configuration settings
+          echo "📦 启用 Manual Hook..."
           echo "CONFIG_KSU=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KPM=y" >> ./common/arch/arm64/configs/gki_defconfig
+          
           # Add VFS configuration settings
           echo "CONFIG_KSU_SUSFS_SUS_SU=n" >> ./common/arch/arm64/configs/gki_defconfig
-          echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig      
+          echo "CONFIG_KSU_MANUAL_HOOK=y" >> ./common/arch/arm64/configs/gki_defconfig    
+          
           # Add SUSFS configuration settings
           echo "CONFIG_KSU_SUSFS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_HAS_MAGIC_MOUNT=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -315,6 +342,7 @@ jobs:
           echo "CONFIG_KSU_SUSFS_HIDE_KSU_SUSFS_SYMBOLS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_SPOOF_CMDLINE_OR_BOOTCONFIG=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_KSU_SUSFS_OPEN_REDIRECT=y" >> ./common/arch/arm64/configs/gki_defconfig
+          
           if [ "${{ github.event.inputs.bbr }}" == "On" ]; then
             echo "🌐 启用BBR网络算法..."
             echo "CONFIG_TCP_CONG_ADVANCED=y" >> ./common/arch/arm64/configs/gki_defconfig
@@ -324,14 +352,17 @@ jobs:
             echo "CONFIG_TCP_CONG_WESTWOOD=n" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_TCP_CONG_HTCP=n" >> ./common/arch/arm64/configs/gki_defconfig
           fi
+          
           if [ "${{ github.event.inputs.lz4kd }}" == "On" ]; then
             echo "📦 启用lz4kd压缩..."
             echo "CONFIG_CRYPTO_LZ4KD=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_CRYPTO_LZ4K_OPLUS=y" >> ./common/arch/arm64/configs/gki_defconfig
             echo "CONFIG_ZRAM_WRITEBACK=y" >> ./common/arch/arm64/configs/gki_defconfig
           fi
+          
           # Add O2 config
           echo "CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE=y" >> ./common/arch/arm64/configs/gki_defconfig
+          
           # Remove check_defconfig
           sed -i 's/check_defconfig//' ./common/build.config.gki
           echo "✅ 内核配置更新完成"
@@ -441,7 +472,7 @@ jobs:
         with:
           name: zram.ko
           path: ./kernel_workspace/kernel_platform/common/out/drivers/block/zram/zram.ko
-
+          
         env:
           CHATID: ${{secrets.CHATID}}
           BOT_TOKEN: ${{secrets.BOT_TOKEN}}
