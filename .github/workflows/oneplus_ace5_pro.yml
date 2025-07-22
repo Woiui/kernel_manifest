@@ -249,7 +249,6 @@ jobs:
          sed -i '$s|echo "\$res"|echo "-android14-11-o-g802d968fb2c7"|' kernel_platform/msm-kernel/scripts/setlocalversion
          sed -i '$s|echo "\$res"|echo "-android14-11-o-g802d968fb2c7"|' kernel_platform/external/dtc/scripts/setlocalversion
          echo "✅ 内核源码准备完成"
-          
       # ====================== 内核定制阶段 ======================
       - name: "⚡ Setup SukiSU Ultra | 配置SukiSU Ultra"
         run: |
@@ -262,8 +261,8 @@ jobs:
           
           cd KernelSU
           echo "⬇️ 下载KernelSU设置工具..."
-          curl -L -o setup.bin https://github.com/Xiaomichael/OnePlus-Actions/raw/Build/script/setup.bin
-          chmod +x setup.bin
+          curl -L -o sukisu_setup.bin https://github.com/Xiaomichael/OnePlus-Actions/raw/Build/script/sukisu_setup.bin
+          chmod +x sukisu_setup.bin
           
           # 验证Makefile存在
           if [ ! -f "kernel/Makefile" ]; then
@@ -271,7 +270,8 @@ jobs:
             ls -la
             exit 1
           fi
-          ./setup.bin
+          
+          ./sukisu_setup.bin
           echo "✅ SukiSU Ultra配置完成"
           
       - name: "🔧 Set up SUSFS | 配置 SUSFS"
@@ -281,7 +281,7 @@ jobs:
           git clone https://gitlab.com/simonpunk/susfs4ksu.git -b gki-${{ github.event.inputs.ANDROID_VERSION }}-${{ github.event.inputs.KERNEL_VERSION }}
           git clone https://github.com/Xiaomichael/kernel_patches.git
           git clone https://github.com/ShirkNeko/SukiSU_patch.git
-          git clone https://github.com/Lama3L9R/sukisu-quick-setup.git
+          # git clone https://github.com/Lama3L9R/sukisu-quick-setup.git
           
           cd kernel_platform
           echo "📝 复制补丁文件..."
@@ -430,7 +430,7 @@ jobs:
         run: |
           echo "🏗️ 开始内核编译..."
           if [ "${{ github.event.inputs.KERNEL_VERSION }}" == "6.1" ]; then
-            export KBUILD_BUILD_TIMESTAMP="Wed May 29 07:25:40 UTC 2025"
+            export KBUILD_BUILD_TIMESTAMP="Thu May 29 07:25:40 UTC 2025"
             export KBUILD_BUILD_VERSION=1
             export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/prebuilts/clang/host/linux-x86/clang-r487747c/bin:$PATH"
             export PATH="/usr/lib/ccache:$PATH"
@@ -438,22 +438,17 @@ jobs:
             cd kernel_workspace/kernel_platform/common
             make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out KCFLAGS+=-O2 gki_defconfig all
           elif [ "${{ github.event.inputs.KERNEL_VERSION }}" == "5.15" ]; then
-            echo "🏗️ 开始内核编译..."
             export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/prebuilts/clang/host/linux-x86/clang-r450784e/bin:$PATH"
             export PATH="/usr/lib/ccache:$PATH"
             sudo apt install libelf-dev
             cd kernel_workspace/kernel_platform/common
             make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out gki_defconfig all
           elif [ "${{ github.event.inputs.KERNEL_VERSION }}" == "5.10" ]; then
-            echo "🏗️ 开始内核编译..."
             export PATH="$GITHUB_WORKSPACE/kernel_workspace/kernel_platform/prebuilts-master/clang/host/linux-x86/clang-r416183b/bin:$PATH"
             export PATH="/usr/lib/ccache:$PATH"
             sudo apt install libelf-dev
             cd kernel_workspace/kernel_platform/common
             make -j$(nproc --all) LLVM_IAS=1 LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="ccache clang" RUSTC=../../prebuilts/rust/linux-x86/1.73.0b/bin/rustc PAHOLE=../../prebuilts/kernel-build-tools/linux-x86/bin/pahole LD=ld.lld HOSTLD=ld.lld O=out gki_defconfig all
-          # else
-            # cd kernel_workspace
-            # LTO=thin ./kernel_platform/oplus/build/oplus_build_kernel.sh ${{ github.event.inputs.CPUD }} gki
           fi
           # 显示ccache统计信息
           ccache -s
@@ -464,56 +459,31 @@ jobs:
           echo "📦 准备AnyKernel3打包环境..."
           git clone https://github.com/Xiaomichael/AnyKernel3 --depth=1
           rm -rf ./AnyKernel3/.git
-          dir1="kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/dist/"
-          dir2="kernel_workspace/kernel_platform/bazel-out/k8-fastbuild/bin/msm-kernel/${{ github.event.inputs.CPUD }}_gki_kbuild_mixed_tree/"
-          dir3="kernel_workspace/kernel_platform/out/msm-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.CPUD }}-gki/dist/"
-          dir4="kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/gki_kernel/common/arch/arm64/boot/"
-          dir5="kernel_workspace/kernel_platform/out/msm-${{ github.event.inputs.CPUD }}-${{ github.event.inputs.CPUD }}-gki/gki_kernel/common/arch/arm64/boot/"
-          dir6="kernel_workspace/kernel_platform/common/out/arch/arm64/boot/"
-          target1="./AnyKernel3/"
-          target2="./kernel_workspace/kernel"
-
-          if find "$dir1" -name "Image" | grep -q "Image"; then
-            image_path="$dir1"Image
-          elif find "$dir2" -name "Image" | grep -q "Image"; then
-            image_path="$dir2"Image
-          elif find "$dir3" -name "Image" | grep -q "Image"; then
-            image_path="$dir3"Image
-          elif find "$dir4" -name "Image" | grep -q "Image"; then
-            image_path="$dir4"Image
-          elif find "$dir5" -name "Image" | grep -q "Image"; then
-            image_path="$dir5"Image
-          elif find "$dir6" -name "Image" | grep -q "Image"; then
-            image_path="$dir6"Image
-          else
-            image_path=$(find "./kernel_workspace/kernel_platform/common/out/" -name "Image" | head -n 1)
+          mkdir -p kernel_workspace/kernel_platform/out/Final-Image-Find/
+          dir1=""
+          dir2=""
+          image_path=$(find "./kernel_workspace/kernel_platform/common/out/" -name "Image" | head -n 1)
+          if [ -n "$image_path" ]; then
+            dir1=$(dirname "$image_path")/
+            echo "✅ 使用 make 编译的统一路径，成功找到 Image 文件 ✅"
           fi
-
           if [ -n "$image_path" ] && [ -f "$image_path" ]; then
-            mkdir -p "$dir1"
-            if [ "$(realpath "$image_path")" != "$(realpath "$dir1"Image)" ]; then
-              cp "$image_path" "$dir1"
-            else
-              echo "源文件与目标相同，跳过复制"
-            fi
-            cp "$dir1"Image ./AnyKernel3/Image
-          else
-            echo "未找到 Image 文件，构建可能失败"
-            exit 1
+            echo "Image file finally located at: $image_path"
+            cp "$image_path" ./AnyKernel3/Image
+            cp "$image_path" kernel_workspace/kernel_platform/out/Final-Image-Find/Image
           fi
          
       - name: "🧩 Patch Kernel Image (KPM) | KPM修补镜像"
         if: ${{ github.event.inputs.KPM == 'On' }}
         run: |
           echo "🔧 正在应用KPM补丁..."
-          cd kernel_workspace/kernel_platform/out/msm-kernel-${{ github.event.inputs.CPUD }}-gki/dist
+          cd kernel_workspace/kernel_platform/out/Final-Image-Find
           curl -LO https://github.com/SukiSU-Ultra/SukiSU_KernelPatch_patch/releases/download/0.12.0/patch_linux
           chmod +x patch_linux
           ./patch_linux
           rm -f Image
           mv oImage Image
           cp Image $GITHUB_WORKSPACE/AnyKernel3/Image
-          cp Image $GITHUB_WORKSPACE/kernel_workspace/kernel
           echo "✅ KPM补丁应用完成"
 
       # ====================== 上传阶段 ======================
@@ -546,23 +516,6 @@ jobs:
         with:
           name: zram.ko
           path: ./kernel_workspace/kernel_platform/common/out/drivers/block/zram/zram.ko
-
-      # - name: "📦 Package files | 打包文件"
-        # run: |
-            # echo "📦📤 正在打包文件..."
-            # cd AnyKernel3
-            # zip -q -r "../${{ steps.set_name.outputs.ARTIFACT_NAME }}.zip" ./*
-            # cd ..
-            # cat > release.txt << 'EOF'
-            # ${{ github.event.inputs.FEIL }}
-            # ```
-            # 构建时间：$(TZ=Asia/Shanghai date)
-            # 内核版本：${{ github.event.inputs.ANDROID_VERSION}}-${{ github.event.inputs.KERNEL_VERSION }}
-            # KSU 版本：${{env.KSUVER_STR}}(${{env.KSUVER}})
-            # KPM 状态：${{ github.event.inputs.KPM }}
-            # LZ4KD 状态: ${{ github.event.inputs.lz4kd }}
-            # ```
-            # EOF
 
         env:
           CHATID: ${{secrets.CHATID}}
